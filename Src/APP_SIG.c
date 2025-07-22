@@ -1,0 +1,1117 @@
+/**
+ * @file        LibRamp.c
+ * @brief       Framework Memory Access Control module.
+ * @note        TemplateDetailsDescription.\n
+ *
+ * @author      mba
+ * @date        15/09/2024
+ * @version     1.0
+ */
+// ********************************************************************
+// *                      Includes
+// ********************************************************************
+#include "./APP_SIG.h"
+#include "./APP_CTRL/APP_SYS/Src/APP_SYS.h"
+#include "APP_CFG/ConfigFiles/APPSIG_ConfigPrivate.h"
+#include "APP_CTRL/APP_SDM/Src/APP_SDM.h"
+
+
+#include "Library/Queue/Src/LIBQueue.h"
+#include "Library/SafeMem/SafeMem.h"
+
+
+
+
+// ********************************************************************
+// *                      Defines
+// ********************************************************************
+
+// ********************************************************************
+// *                      Types
+// ********************************************************************
+/* CAUTION : Automatic generated code section for Enum: Start */
+
+/* CAUTION : Automatic generated code section for Enum: End */
+
+//-----------------------------ENUM TYPES-----------------------------//
+
+/* CAUTION : Automatic generated code section for Structure: Start */
+
+/* CAUTION : Automatic generated code section for Structure: End */
+//-----------------------------STRUCT TYPES---------------------------//
+///@brief Queue information for
+typedef struct 
+{
+    t_uint32 msgId_u32;                             //---- Id of the message ----//
+    t_uint8 data_ua8[APPSIG_DATA_PAYLOAD_LEN];       //---- Payload data ----//
+    t_eAPPSIG_MsgOrigin origin_e;                   //---- Message Origin ----//
+} t_sAPPSIG_msgPayload;
+
+///@brief Message Information 
+typedef struct 
+{
+    t_uint32 lastTimeSend_u32;          //---- last time we sent the msg ---//
+    t_uint32 lastTimeRcv_u32;           //---- last time received ----//
+} t_sAPPSIG_MsgTimestamp;
+//-----------------------------TYPEDEF TYPES---------------------------//
+
+// ********************************************************************
+// *                      Variables
+// ********************************************************************
+///@brief Module State
+static t_eCyclicModState g_AppSig_ModState_e = STATE_CYCLIC_CFG;
+
+///@brief Queue Managment 
+t_sLIBQUEUE_QueueCore g_RxSoftQueueMngmt_s;
+t_sAPPSIG_msgPayload g_msgPayloadBuffer_as[APPSIG_RX_BUFFER_SIZE];
+
+///@brief Container for all signal value 
+t_float32 g_signalValue_af32[APPSIG_SIGNAL_NB];
+
+///@brief last time send messages
+t_sAPPSIG_MsgTimestamp g_SrlSMsgTimeStamp_as[APPSIG_SRL_MSG_NB];
+t_sAPPSIG_MsgTimestamp g_CANSMsgTimeStamp_as[APPSIG_CAN_MSG_NB];
+
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+typedef t_eReturnCode (t_cbAPPSIG_SendFrameMsg)(t_sAPPSIG_MsgInfo * f_msgInfo_ps);
+//********************************************************************************
+//                      Local functions - Prototypes
+//********************************************************************************
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_ConfigurationState(void);
+
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_OperationalState(void);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_Ope_TxSignalMngmt(void);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_Ope_RxDiagnosticMngmt(void);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_InitializeSrlGate(void);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayload_s, 
+                                                t_sAPPSIG_MsgInfo ** f_msgInfo_ps);
+
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_MsgDecoder(   t_uint8 * f_data_pu8, 
+                                            const t_sAPPSIG_MsgInfo * f_msgInfo_ps);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_MsgEncoder(   t_uint8 * f_data_pu8, 
+                                            const t_sAPPSIG_MsgInfo * f_msgInfo_ps);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_eReturnCode s_APPSIG_SendSrlFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps);
+static t_eReturnCode s_APPSIG_SendCanFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static void s_APPSIG_SerialRcvCallback( t_uint8 * f_rxData_pu8, 
+                                        t_uint16 f_dataSize_u16, 
+                                        t_eFMKSRL_RxCallbackInfo f_InfoCb_e);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static t_uint32 s_APPSIG_ExtractRawValue(   const t_uint8 *f_data_pu8,
+                                            t_uint8 f_startBit_u8,
+                                            t_uint8 f_bitLength_u8,
+                                            t_eAPPSIG_SigEncode f_encode_e);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static void s_APPSIG_InsertRawValue( t_uint8 * f_data_pu8,
+                                     t_uint8 f_startBit_u8,
+                                     t_uint8 f_bitLength_u8,
+                                     t_eAPPSIG_SigEncode f_encode_e,
+                                     t_uint32 f_rawValue_u32);
+
+//********************************************************************************
+//                      Public functions - Implementation
+//********************************************************************************
+//********************************
+// APPSIG_Init
+//********************************
+t_eReturnCode APPSIG_Init(void)
+{
+    t_eReturnCode Ret_e;
+    t_uint16 LLI_u16;
+    t_sLIBQUEUE_QueueCfg queueCfg_s;
+
+    //---- set to 0 buffer ----//
+    Ret_e = SafeMem_memclear(   &g_msgPayloadBuffer_as, 
+                                (t_uint16)(sizeof(t_sAPPSIG_msgPayload) * APPSIG_RX_BUFFER_SIZE));
+
+    //---- Configure Rx Buffer Queue ----//
+    queueCfg_s.bufferHead_pv = (void *)&g_msgPayloadBuffer_as;
+    queueCfg_s.bufferSize_u8 = APPSIG_RX_BUFFER_SIZE;
+    queueCfg_s.elementSize_u8 = sizeof(t_sAPPSIG_msgPayload);
+    queueCfg_s.enableOverwrite_b = False;
+    Ret_e = LIBQUEUE_Create(&g_RxSoftQueueMngmt_s, queueCfg_s);
+
+    //---- init signals values ----//
+    for(LLI_u16 = (t_uint16)0 ; LLI_u16 < (t_uint16)APPSIG_SIGNAL_NB ; LLI_u16++)
+    {
+        g_signalValue_af32[LLI_u16] = (t_float32)0xFFFFFFFFF;
+    }
+
+    //---- init serial timestamp ----//
+    for(LLI_u16 = (t_uint16)0 ; LLI_u16 < (t_uint16)APPSIG_SRL_MSG_NB ; LLI_u16++)
+    {
+        g_SrlSMsgTimeStamp_as[LLI_u16].lastTimeRcv_u32 = (t_uint32)0;
+        g_SrlSMsgTimeStamp_as[LLI_u16].lastTimeSend_u32 = (t_uint32)0;
+    }
+
+    //---- init CAN timestamp ----//
+    for(LLI_u16 = (t_uint16)0 ; LLI_u16 < (t_uint16)APPSIG_CAN_MSG_NB ; LLI_u16++)
+    {
+        g_CANSMsgTimeStamp_as[LLI_u16].lastTimeRcv_u32 = (t_uint32)0;
+        g_CANSMsgTimeStamp_as[LLI_u16].lastTimeSend_u32 = (t_uint32)0;
+    }
+
+    return Ret_e;
+}
+
+//********************************
+// APPSIG_Cyclic
+//********************************
+t_eReturnCode APPSIG_Cyclic(void)
+{
+    t_eReturnCode Ret_e = RC_OK;
+
+    switch(g_AppSig_ModState_e)
+    {
+        case STATE_CYCLIC_CFG:
+        {
+            Ret_e = s_APPSIG_ConfigurationState();
+
+            if(Ret_e == RC_OK)
+            {
+                g_AppSig_ModState_e = STATE_CYCLIC_WAITING;
+            }
+            break;
+        }
+        case STATE_CYCLIC_WAITING:
+        {
+            break;
+        }
+        case STATE_CYCLIC_PREOPE:
+        {
+            g_AppSig_ModState_e = STATE_CYCLIC_OPE;
+            break;
+        }
+        case STATE_CYCLIC_OPE:
+        {
+            Ret_e = s_APPSIG_OperationalState();
+            if(Ret_e < RC_OK)
+            {
+                ASSERT((t_uint16)0);
+                g_AppSig_ModState_e = STATE_CYCLIC_ERROR;
+            }
+        }
+        case STATE_CYCLIC_BUSY:
+        case STATE_CYCLIC_ERROR:
+        default:
+        {
+            break;
+        }
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * APPSIG_GetState
+ *********************************/
+t_eReturnCode APPSIG_GetState(t_eCyclicModState *f_State_pe)
+{
+    t_eReturnCode Ret_e = RC_OK;
+
+    if(f_State_pe == (t_eCyclicModState *)NULL)
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+    }
+    if(Ret_e == RC_OK)
+    {
+        *f_State_pe = g_AppSig_ModState_e;
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * APPSIG_SetState
+ *********************************/
+t_eReturnCode APPSIG_SetState(t_eCyclicModState f_State_e)
+{
+
+    g_AppSig_ModState_e = f_State_e;
+
+    return RC_OK;
+}
+
+
+/*********************************
+ * APPSIG_SetSignalValue
+ *********************************/
+t_eReturnCode APPSIG_SetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 f_value_f32)
+{
+    t_eReturnCode Ret_e;
+
+    if(f_signal_e >= APPSIG_SIGNAL_NB)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)0);
+    }
+    else 
+    {
+        Ret_e = RC_OK;
+        g_signalValue_af32[(t_uint8)f_signal_e] = f_value_f32;
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * APPSIG_GetSignalValue
+ *********************************/
+t_eReturnCode APPSIG_GetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 * f_value_pf32)
+{
+    t_eReturnCode Ret_e;
+
+    if(f_signal_e >= APPSIG_SIGNAL_NB)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)0);
+    }
+    else if (f_value_pf32 == (t_float32 *)NULL)
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else 
+    {
+        Ret_e = RC_OK;
+        *f_value_pf32 =  (t_float32)g_signalValue_af32[(t_uint8)f_signal_e];
+    }
+
+    return Ret_e;
+}
+
+t_eReturnCode APPSIG_AddSomeToQueue(t_uint8 *f_data_pu8)
+{
+    t_eReturnCode Ret_e;
+    t_sAPPSIG_msgPayload quueumsg;
+
+    quueumsg.msgId_u32 = f_data_pu8[0];
+    SafeMem_memcpy(quueumsg.data_ua8, &f_data_pu8[1], 8);
+    quueumsg.origin_e = APPSIG_MSG_ORIGIN_SRL;
+
+    Ret_e = LIBQUEUE_WriteElement(&g_RxSoftQueueMngmt_s, &quueumsg, sizeof(t_sAPPSIG_msgPayload));
+
+    return Ret_e;
+}
+//********************************************************************************
+//                      Local functions - Implementation
+//********************************************************************************
+/*********************************
+ * s_APPSIG_ConfigurationState
+ *********************************/
+static t_eReturnCode s_APPSIG_ConfigurationState(void)
+{
+    t_eReturnCode Ret_e = RC_WARNING_NO_OPERATION;
+
+    //---- get the port gate configuration and initialize the Port ----//
+    if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
+    {
+        //Ret_e = s_APPSIG_InitializeCANGate();
+    }
+    if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
+    {
+        Ret_e = s_APPSIG_InitializeSrlGate();
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_OperationalState
+ *********************************/
+static t_eReturnCode s_APPSIG_OperationalState(void)
+{
+    t_eReturnCode Ret_e;
+
+    //---- Call Rx Signal Managment ----//
+    Ret_e = s_APPSIG_Ope_RxSignalMngmt();
+    
+    if(Ret_e < RC_OK)
+    {
+        ASSERT((t_uint16)Ret_e);
+        Ret_e = RC_OK;
+    }
+    if(Ret_e == RC_OK)
+    {
+        //---- Call Rx Signal Managment ----//
+        Ret_e = s_APPSIG_Ope_TxSignalMngmt();
+    }
+    if(Ret_e >= RC_OK)
+    {
+        //---- Call Rx Diagnostic Mngmt ----//
+        s_APPSIG_Ope_RxDiagnosticMngmt();
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_Ope_RxSignalMngmt
+ *********************************/
+static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void)
+{
+    t_eReturnCode Ret_e;
+    t_eReturnCode taskRet_e;
+    t_sAPPSIG_msgPayload msgPayload_s;
+    t_sAPPSIG_MsgInfo * msgInfo_ps = NULL;
+    t_uint8 idxMsg_u8;
+
+    Ret_e = RC_OK;
+    taskRet_e = RC_OK;
+    for(idxMsg_u8 = (t_uint8)0 ; 
+        (idxMsg_u8 < APPSIG_TREAT_ELEM_NB)
+    &&  (taskRet_e == RC_OK) ; idxMsg_u8++)
+    {
+        //---- read one element from the queue ----//
+        taskRet_e = LIBQUEUE_ReadElement(   &g_RxSoftQueueMngmt_s,
+                                            &msgPayload_s,
+                                            sizeof(msgPayload_s));
+
+        //---- no element left in queue ----//
+        if(taskRet_e == RC_WARNING_NO_OPERATION)
+        {
+            //---- out of loop ----//
+            Ret_e = RC_OK;
+            break;
+        }
+        else if (taskRet_e == RC_OK)
+        {
+            //---- get the pointor for the message ----// 
+            Ret_e = s_APPSIG_FindSignalMapping(msgPayload_s, &msgInfo_ps);
+
+            if(Ret_e == RC_OK)
+            {
+                Ret_e = s_APPSIG_MsgDecoder(msgPayload_s.data_ua8, msgInfo_ps);
+            }
+        } 
+        //---- propagate error ----//
+        else 
+        {
+            Ret_e = taskRet_e;
+        }                       
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_Ope_TxSignalMngmt
+ *********************************/
+static t_eReturnCode s_APPSIG_Ope_TxSignalMngmt(void)
+{
+    t_eReturnCode Ret_e;
+        
+    Ret_e = RC_OK;
+   //---- first try to send every Serial message if it is configured ----//
+   if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
+    {
+        Ret_e = s_APPSIG_SendTxMsgMngmt(APPSIG_PORTGATE_SRL);
+        if(Ret_e < RC_OK)
+        {
+            ASSERT((t_uint16)Ret_e);
+        }
+    }
+    if(Ret_e >= RC_OK)
+    {
+        //---- first try to send every CAN message if it is configured ----//
+        if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
+        {
+            Ret_e = s_APPSIG_SendTxMsgMngmt(APPSIG_PORTGATE_CAN);
+        }
+    }   
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_Ope_RxDiagnosticMngmt
+ *********************************/
+static t_eReturnCode s_APPSIG_Ope_RxDiagnosticMngmt(void)
+{
+    t_eReturnCode Ret_e;
+
+    Ret_e = RC_OK;
+    //---- Diagnostic on Rx Serial Message ----//
+    if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
+    {
+        Ret_e = s_APPSIG_RxTimeoutMngmt(APPSIG_PORTGATE_SRL);
+        if(Ret_e < RC_OK)
+        {
+            ASSERT((t_uint16)Ret_e);
+        }
+    }
+    if(Ret_e >= RC_OK)
+    {
+        //---- first try to send every CAN message if it is configured ----//
+        if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
+        {
+            Ret_e = s_APPSIG_RxTimeoutMngmt(APPSIG_PORTGATE_CAN);
+        }
+    }
+
+    return Ret_e;
+}
+/*********************************
+ * s_APPSIG_SendTxMsgMngmt
+ *********************************/
+static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
+{
+    t_eReturnCode Ret_e;
+    t_uint16 idxMsg_u16;
+    t_uint32 currentTime_u32;
+    t_sAPPSIG_MsgInfo * msgInfo_pas;
+    t_cbAPPSIG_SendFrameMsg * sendMsgCallback_pf;
+    t_sAPPSIG_MsgTimestamp * msgTimeStamp_pas;
+    t_uint16 nbMsg_u16; 
+
+    if(f_msgGate_e >= APPSIG_MSG_ORIGIN_NB)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)0);
+    }    
+    else 
+    {
+        Ret_e = RC_OK;
+        FMKCPU_GetTick(&currentTime_u32);
+        
+        //---- get info depeding on gate use ----//
+        if(f_msgGate_e == APPSIG_MSG_ORIGIN_CAN)
+        {
+            sendMsgCallback_pf = &s_APPSIG_SendCanFrame;
+            msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)g_CANSMsgTimeStamp_as;
+            msgInfo_pas = (t_sAPPSIG_MsgInfo *)(c_AppSig_CanMsgCfg_as);
+            nbMsg_u16 = APPSIG_CAN_MSG_NB;
+        }
+        else if(f_msgGate_e == APPSIG_MSG_ORIGIN_SRL)
+        {
+            sendMsgCallback_pf = &s_APPSIG_SendSrlFrame;
+            msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)g_SrlSMsgTimeStamp_as;
+            msgInfo_pas = (t_sAPPSIG_MsgInfo *)(c_AppSig_SrlMsgCfg_as);
+            nbMsg_u16 = APPSIG_SRL_MSG_NB;
+        }
+        else 
+        {
+            Ret_e = RC_ERROR_MISSING_CONFIG;
+        }
+    
+        for(idxMsg_u16 = (t_uint16)0 ; 
+        (idxMsg_u16 < nbMsg_u16) 
+        && (Ret_e == RC_OK) ;
+        idxMsg_u16++)
+        {
+            if( ((msgInfo_pas[idxMsg_u16].direction_e == APPSIG_MSG_DIR_TX)
+            ||   (msgInfo_pas[idxMsg_u16].direction_e == APPSIG_MSG_DIR_RX_TX))
+            && (((currentTime_u32 - msgTimeStamp_pas[idxMsg_u16].lastTimeSend_u32) > (t_uint32)msgInfo_pas[idxMsg_u16].msgCycleSend_u16)))
+            {
+                //---- send serial or can frame ----//
+                Ret_e = sendMsgCallback_pf(&msgInfo_pas[idxMsg_u16]);
+
+                if(Ret_e == RC_OK)
+                {
+                    //--- update last time send ----//
+                    msgTimeStamp_pas[idxMsg_u16].lastTimeSend_u32 = currentTime_u32;
+                }
+            }
+        }
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_RxTimeoutMngmt
+ *********************************/
+static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
+{
+    t_eReturnCode Ret_e;
+    t_sAPPSIG_MsgInfo * msgInfo_pas;
+    t_sAPPSIG_MsgTimestamp * msgTimeStamp_pas;
+    t_uint32 currentTime_u32;
+    t_uint16 idxMsg_u16;
+    t_uint16 nbMsg_u16; 
+
+    if(f_msgGate_e >= APPSIG_MSG_ORIGIN_NB)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)0);
+    }    
+    else 
+    {
+        Ret_e = RC_OK;
+        FMKCPU_GetTick(&currentTime_u32);
+
+        //---- get info depeding on gate use ----//
+        if(f_msgGate_e == APPSIG_MSG_ORIGIN_CAN)
+        {
+            msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)g_CANSMsgTimeStamp_as;
+            msgInfo_pas = (t_sAPPSIG_MsgInfo *)(c_AppSig_CanMsgCfg_as);
+            nbMsg_u16 = (t_uint8)APPSIG_CAN_MSG_NB;
+        }
+        else if(f_msgGate_e == APPSIG_MSG_ORIGIN_SRL)
+        {
+            msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)g_SrlSMsgTimeStamp_as;
+            msgInfo_pas = (t_sAPPSIG_MsgInfo *)(c_AppSig_SrlMsgCfg_as);
+            nbMsg_u16 = (t_uint8)APPSIG_SRL_MSG_NB;
+        }
+        else 
+        {
+            Ret_e = RC_ERROR_MISSING_CONFIG;
+        }
+        if(Ret_e == RC_OK)
+        {
+            for(idxMsg_u16 = (t_uint16)0 ; idxMsg_u16 < nbMsg_u16 ; idxMsg_u16++)
+            {
+                if((currentTime_u32 - msgTimeStamp_pas[idxMsg_u16].lastTimeRcv_u32) > msgInfo_pas->msgTimeout_u16)
+                {
+                    APPSDM_ReportDiagEvnt(  APPSDM_DIAG_ITEM_APPSIG_MSG_TIMEOUT,
+                                            APPSDM_DIAG_ITEM_REPORT_FAIL,
+                                            (t_uint16)idxMsg_u16,
+                                            (t_uint16)0);
+                }
+                else 
+                {
+                    APPSDM_ReportDiagEvnt(  APPSDM_DIAG_ITEM_APPSIG_MSG_TIMEOUT,
+                                            APPSDM_DIAG_ITEM_REPORT_PASS,
+                                            (t_uint16)0,
+                                            (t_uint16)0);   
+                }
+            }
+        }
+        
+    }
+
+    return Ret_e;
+}
+/*********************************
+ * s_APPSIG_FindSignalMapping
+ *********************************/
+static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayload_s, 
+                                                t_sAPPSIG_MsgInfo ** f_msgInfo_ps)
+{
+    t_eReturnCode Ret_e;
+    t_sAPPSIG_MsgInfo * msgPortGate_ps;
+    t_sAPPSIG_MsgTimestamp * msgTimeStamp_pas;
+    t_uint16 idxMsgPrt_u16;
+    t_uint16 msgPortNb_u16;
+    t_uint32 currentTime_u32;
+
+    if(f_msgInfo_ps == (t_sAPPSIG_MsgInfo **)NULL)
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)Ret_e);
+    }
+    else 
+    {
+        //--- set the pointor to the CanMsg Configuration
+        if(f_msgPayload_s.origin_e == APPSIG_PORTGATE_CAN)
+        {
+            msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)g_CANSMsgTimeStamp_as;
+            msgPortNb_u16 = (t_uint16)APPSIG_CAN_MSG_NB;
+            msgPortGate_ps = (t_sAPPSIG_MsgInfo *)&c_AppSig_CanMsgCfg_as;
+        }
+        else if(f_msgPayload_s.origin_e == APPSIG_PORTGATE_SRL)
+        {   
+            msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)g_SrlSMsgTimeStamp_as;
+            msgPortNb_u16 = (t_uint16)APPSIG_SRL_MSG_NB;
+            msgPortGate_ps = (t_sAPPSIG_MsgInfo *)&c_AppSig_SrlMsgCfg_as;
+        }
+        else 
+        {
+            msgPortNb_u16 = (t_uint16)0;
+            msgPortGate_ps = (t_sAPPSIG_MsgInfo *)NULL;
+            ASSERT((t_uint16)f_msgPayload_s.origin_e);
+            Ret_e = RC_ERROR_MISSING_CONFIG;         
+        }
+
+        if(msgPortGate_ps != (t_sAPPSIG_MsgInfo *)NULL)
+        {
+            //--- we suppose that we don't found the element 
+            Ret_e = RC_ERROR_LIMIT_REACHED;
+            //---- find the message info from msgPortGate cfg ----//
+            for(idxMsgPrt_u16 = (t_uint16)0 ; idxMsgPrt_u16 < msgPortNb_u16 ; idxMsgPrt_u16++)
+            {
+                if(msgPortGate_ps[idxMsgPrt_u16].msgId_u32 == (t_uint32)f_msgPayload_s.msgId_u32)
+                {
+                    *f_msgInfo_ps = msgPortGate_ps;
+                    //---- update last time msg received ----//
+                    FMKCPU_GetTick(&currentTime_u32);
+                    msgTimeStamp_pas[idxMsgPrt_u16].lastTimeRcv_u32 = currentTime_u32;
+                    //---- success -> out of loop ----//
+                    Ret_e = RC_OK;
+                    break;
+                }
+            }
+        }
+    }
+
+    return Ret_e;
+
+}
+
+/*********************************
+ * s_APPSIG_MsgDecoder
+ *********************************/
+static t_eReturnCode s_APPSIG_MsgDecoder(   t_uint8 * f_data_pu8, 
+                                            const t_sAPPSIG_MsgInfo * f_msgInfo_ps)
+{
+    t_eReturnCode Ret_e;
+    t_uint8 idxSignal_u8; 
+    t_sAPPSIG_SigCfg * signalCfg_ps;
+    t_sAPPSIG_MsgSignalsCfg * msgSignalsCfg_pas;
+    t_eAPPSIG_Signal signalId_e;
+    t_float32 sigVal_f32;
+    t_uint32 rawValue_u32;
+
+    if((f_data_pu8 == (t_uint8 *)NULL)
+    || (f_msgInfo_ps == (const t_sAPPSIG_MsgInfo *)NULL))
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else 
+    {
+        Ret_e = RC_OK;
+
+        for(idxSignal_u8 = (t_uint8)0 ; idxSignal_u8 < f_msgInfo_ps->nbSignal_u8 ; idxSignal_u8++)
+        {
+            //---- get info/ reset container -----//
+            sigVal_f32 = (t_float32)0.0f;
+            msgSignalsCfg_pas = (t_sAPPSIG_MsgSignalsCfg *)(f_msgInfo_ps->msgSignalsCfg_pas);
+            signalId_e = msgSignalsCfg_pas[idxSignal_u8].signal_e; 
+
+            if(signalId_e >= APPSIG_SIGNAL_NB)
+            {
+                Ret_e = RC_ERROR_PARAM_INVALID;
+                ASSERT((t_uint16)signalId_e);
+                break;
+            }   
+            else
+            {
+                // pointer to signal configuration startbit and lenght ----//
+                signalCfg_ps = (t_sAPPSIG_SigCfg *)&c_AppSig_SignalCfg_as[(t_uint16)signalId_e];
+                rawValue_u32 = (t_uint32)s_APPSIG_ExtractRawValue(  f_data_pu8,
+                                                                    msgSignalsCfg_pas[idxSignal_u8].startBit_u8,
+                                                                    signalCfg_ps->bitLenght_u8,
+                                                                    signalCfg_ps->sigEncode_e);
+
+                sigVal_f32 = (t_float32)rawValue_u32 * signalCfg_ps->factor_f32 + (t_float32)signalCfg_ps->offset_s16;
+                g_signalValue_af32[(t_uint16)signalId_e] = (t_float32)sigVal_f32;
+            }
+        }
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_MsgEncoder
+ *********************************/
+static t_eReturnCode s_APPSIG_MsgEncoder(   t_uint8 * f_data_pu8, 
+                                            const t_sAPPSIG_MsgInfo * f_msgInfo_ps)
+{
+    t_eReturnCode Ret_e;
+    t_uint8 idxSignal_u8; 
+    t_sAPPSIG_SigCfg * signalCfg_ps;
+    t_sAPPSIG_MsgSignalsCfg * msgSignalsCfg_pas;
+    t_eAPPSIG_Signal signalId_e;
+    t_float32 sigVal_f32;
+    t_uint32 rawValue_u32;
+
+    if((f_data_pu8 == (t_uint8 *)NULL)
+    || (f_msgInfo_ps == (const t_sAPPSIG_MsgInfo *)NULL))
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else
+    {
+        Ret_e = RC_OK;
+        for(idxSignal_u8 = (t_uint8)0; idxSignal_u8 < f_msgInfo_ps->nbSignal_u8 ; idxSignal_u8++)
+        {
+            //---- get info/reset ----//
+            sigVal_f32 = (t_float32)0.0f;
+            msgSignalsCfg_pas = (t_sAPPSIG_MsgSignalsCfg *)(f_msgInfo_ps->msgSignalsCfg_pas);
+            signalId_e = msgSignalsCfg_pas[idxSignal_u8].signal_e;
+
+            if(signalId_e >= APPSIG_SIGNAL_NB)
+            {
+                Ret_e = RC_ERROR_PARAM_INVALID;
+                ASSERT((t_uint16)signalId_e);
+                break;
+            }
+            else
+            {
+                signalCfg_ps = (t_sAPPSIG_SigCfg *)&c_AppSig_SignalCfg_as[(t_uint16)signalId_e];
+                sigVal_f32 = g_signalValue_af32[(t_uint16)(signalId_e)];
+
+                rawValue_u32 = (t_uint32)((sigVal_f32 - (t_float32)signalCfg_ps->offset_s16) 
+                                        / (t_float32)signalCfg_ps->factor_f32);
+
+                s_APPSIG_InsertRawValue( f_data_pu8,
+                                         msgSignalsCfg_pas[idxSignal_u8].startBit_u8,
+                                         signalCfg_ps->bitLenght_u8,
+                                         signalCfg_ps->sigEncode_e,
+                                         (t_uint32)rawValue_u32 );
+            }
+        }
+    }
+
+    return Ret_e;
+}
+/*********************************
+ * s_APPSIG_InitializeSrlGate
+ *********************************/
+static t_eReturnCode s_APPSIG_InitializeSrlGate(void)
+{
+    t_eReturnCode Ret_e;
+    t_sFMKSRL_DrvSerialCfg SrlCfg_s;
+    SrlCfg_s.runMode_e = FMKSRL_LINE_RUNMODE_DMA;
+    SrlCfg_s.hwProtType_e = FMKSRL_HW_PROTOCOL_UART;
+
+    SrlCfg_s.hwCfg_s.Baudrate_e = FMKSRL_LINE_BAUDRATE_115200,
+    SrlCfg_s.hwCfg_s.Mode_e = FMKSRL_LINE_MODE_RX_TX;
+    SrlCfg_s.hwCfg_s.Parity_e = FMKSRL_LINE_PARITY_NONE,
+    SrlCfg_s.hwCfg_s.Stopbit_e = FMKSRL_LINE_STOPBIT_1,
+    SrlCfg_s.hwCfg_s.wordLenght_e = FMKSRL_LINE_WORDLEN_8BITS,
+
+    SrlCfg_s.CfgSpec_u.uartCfg_s.hwFlowCtrl_e = FMKSRL_UART_HW_FLOW_CTRL_NONE;
+    SrlCfg_s.CfgSpec_u.uartCfg_s.Type_e = FMKSRL_UART_TYPECFG_UART;
+
+    Ret_e = FMKSRL_InitDrv( APPSIG_PORTGATE_SRL_LINE,
+                            SrlCfg_s,
+                            s_APPSIG_SerialRcvCallback,
+                            (t_cbFMKSRL_TransmitMsgEvent *)NULL_FUNCTION);
+    if(Ret_e == RC_OK)
+    {
+        Ret_e = FMKSRL_ConfigureReception(  APPSIG_PORTGATE_SRL_LINE,
+                                            FMKSRL_OPE_RX_CYCLIC_SIZE,
+                                            APPSIG_SRL_DATA_PAYLOAD_LEN);
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_ExtractRawValue
+ *********************************/
+static void s_APPSIG_SerialRcvCallback( t_uint8 * f_rxData_pu8, 
+                                        t_uint16 f_dataSize_u16, 
+                                        t_eFMKSRL_RxCallbackInfo f_InfoCb_e)
+{
+    static t_uint8 s_idxWrite_u8 = (t_uint8)0;
+    static t_uint8 s_RxBuffer_ua8[APPSIG_SRL_DATA_PAYLOAD_LEN];
+    t_sAPPSIG_msgPayload msgPayload_s;
+    t_bool receptionComplete_b = False;
+    t_eReturnCode Ret_e;
+
+    if(f_dataSize_u16 > APPSIG_DATA_PAYLOAD_LEN)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)(f_dataSize_u16));
+    }
+    if(s_idxWrite_u8 >= APPSIG_DATA_PAYLOAD_LEN)
+    {
+        Ret_e = RC_ERROR_LIMIT_REACHED;
+        ASSERT((t_uint16)(s_idxWrite_u8));
+    }
+    else
+    {
+        switch (f_InfoCb_e)
+        {
+            case FMKSRL_CB_INFO_RECEIVE_PENDING:
+            {
+                Ret_e = SafeMem_memcpy( (&s_RxBuffer_ua8[s_idxWrite_u8]),
+                                        f_rxData_pu8,
+                                        f_dataSize_u16);
+                break;
+            }
+            case FMKSRL_CB_INFO_RECEIVE_ENDING:
+            {
+                Ret_e = SafeMem_memcpy( (&s_RxBuffer_ua8[s_idxWrite_u8]),
+                                        f_rxData_pu8,
+                                        f_dataSize_u16);
+                if(Ret_e == RC_OK)
+                {
+                    s_idxWrite_u8 = (t_uint8)0;
+                    receptionComplete_b = (t_bool)True;
+                }
+                break;
+            }
+            case FMKSRL_CB_INFO_RECEIVE_ERR:
+            case FMKSRL_CB_INFO_RECEIVE_OVERFLOW:
+            {
+                //----- Report Diagnostic Evnt -----//
+                break;
+            }
+        }
+        if(receptionComplete_b == (t_bool)True)
+        {
+            //---- copy into buffer ----//
+            msgPayload_s.msgId_u32 = (t_uint32)s_RxBuffer_ua8[0];
+            msgPayload_s.origin_e = APPSIG_MSG_ORIGIN_SRL;
+            (void)SafeMem_memcpy(   msgPayload_s.data_ua8, 
+                                    &s_RxBuffer_ua8[1], 
+                                    (sizeof(t_uint8) * APPSIG_DATA_PAYLOAD_LEN));
+            Ret_e = LIBQUEUE_WriteElement(  &g_RxSoftQueueMngmt_s, 
+                                            &msgPayload_s, 
+                                            sizeof(t_sAPPSIG_msgPayload));
+
+            if(Ret_e != RC_OK)
+            {
+                ASSERT((t_uint16)Ret_e);
+            }
+            else 
+            {
+                (void)SafeMem_memclear( s_RxBuffer_ua8, 
+                                        (sizeof(t_uint8) * APPSIG_DATA_PAYLOAD_LEN));
+            }            
+        }
+    }
+
+    return;
+}
+
+/*********************************
+ * s_APPSIG_ExtractRawValue
+ *********************************/
+static t_uint32 s_APPSIG_ExtractRawValue(   const t_uint8 *f_data_pu8,
+                                            t_uint8 f_startBit_u8,
+                                            t_uint8 f_bitLength_u8,
+                                            t_eAPPSIG_SigEncode f_encode_e)
+{
+    t_uint32 rawValue_u32 = 0;
+
+    for (t_uint8 i = 0; i < f_bitLength_u8; i++)
+    {
+        t_uint8 msgBit;
+
+        if (f_encode_e == APPSIG_SIG_ENCODE_INTEL) // Intel (LSB at startBit)
+        {
+            msgBit = f_startBit_u8 + i;
+        }
+        else // Motorola (MSB at startBit)
+        {
+            t_uint8 byte = f_startBit_u8 / 8;
+            t_uint8 bit = f_startBit_u8 % 8;
+
+            msgBit = (byte * 8 + bit) - i;
+            msgBit = ((7 - (msgBit / 8)) * 8) + (msgBit % 8);
+        }
+
+        t_uint8 byteIndex = msgBit / 8;
+        t_uint8 bitInByte = msgBit % 8;
+
+        t_uint8 bitVal = (f_data_pu8[byteIndex] >> bitInByte) & 0x01;
+        rawValue_u32 |= ((t_uint32)bitVal << i);
+    }
+
+    return rawValue_u32;
+}
+
+ 
+
+/*********************************
+ * s_APPSIG_InsertRawValue
+ *********************************/
+static void s_APPSIG_InsertRawValue(    t_uint8 *f_data_pu8,
+                                        t_uint8 f_startBit_u8,
+                                        t_uint8 f_bitLength_u8,
+                                        t_eAPPSIG_SigEncode f_encode_e,
+                                        t_uint32 f_rawValue_u32)
+{
+    for (t_uint8 i = 0; i < f_bitLength_u8; i++)
+    {
+        t_uint8 bitIndex = i;
+        t_uint8 msgBit;
+
+        if (f_encode_e == APPSIG_SIG_ENCODE_INTEL) // Intel = LSB at startBit, increasing bit index
+        {
+            msgBit = f_startBit_u8 + i;
+        }
+        else // Motorola = MSB at startBit, decreasing bit index (across bytes)
+        {
+            t_uint8 byte = f_startBit_u8 / 8;
+            t_uint8 bit = f_startBit_u8 % 8;
+
+            msgBit = (byte * 8 + bit) - i;
+            // Correction pour l’inversion des octets à la frontière
+            msgBit = ((7 - (msgBit / 8)) * 8) + (msgBit % 8);
+        }
+
+        t_uint8 byteIndex = msgBit / 8;
+        t_uint8 bitInByte = msgBit % 8;
+
+        // Clear bit
+        f_data_pu8[byteIndex] &= ~(1U << bitInByte);
+        // Set bit if needed
+        if (f_rawValue_u32 & (1U << bitIndex))
+        {
+            f_data_pu8[byteIndex] |= (1U << bitInByte);
+        }
+    }
+}
+
+
+/*********************************
+ * s_APPSIG_InsertRawValue
+ *********************************/
+static t_eReturnCode s_APPSIG_SendSrlFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps)
+{
+    t_eReturnCode Ret_e;
+    t_uint8 msgData_au8[APPSIG_SRL_DATA_PAYLOAD_LEN];;
+
+    //---- Initialize data container ----//
+    memset(msgData_au8, (t_uint8)0, (sizeof(t_uint8) * APPSIG_SRL_DATA_PAYLOAD_LEN));
+
+    //---- first byte is for the Id ----//
+    msgData_au8[0] = (t_uint8)f_msgInfo_ps->msgId_u32;
+
+    Ret_e = s_APPSIG_MsgEncoder(&msgData_au8[1], f_msgInfo_ps);
+
+    if(Ret_e == RC_OK)
+    {
+        Ret_e = FMKSRL_Transmit(APPSIG_PORTGATE_SRL_LINE,
+                                FMKSRL_TX_ONESHOT,
+                                msgData_au8,
+                                APPSIG_SRL_DATA_PAYLOAD_LEN,
+                                (t_uint16)0,
+                                (t_bool)False);
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_SendCanFrame
+ *********************************/
+static t_eReturnCode s_APPSIG_SendCanFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps)
+{
+    return RC_OK;
+}
+//************************************************************************************
+// End of File
+//************************************************************************************
+
+/**
+ *
+ *	@brief
+ *	@note   
+ *
+ *
+ *	@param[in] 
+ *	@param[out]
+ *	 
+ *
+ *
+ */
