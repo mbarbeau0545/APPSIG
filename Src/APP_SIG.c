@@ -677,7 +677,7 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                     APPSDM_ReportDiagEvnt(  APPSDM_DIAG_ITEM_APPSIG_MSG_TIMEOUT,
                                             APPSDM_DIAG_ITEM_REPORT_FAIL,
                                             (t_uint16)idxMsg_u16,
-                                            (t_uint16)0);
+                                            (t_uint16)f_msgGate_e);
                 }
                 else 
                 {
