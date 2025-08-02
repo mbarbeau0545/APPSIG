@@ -446,11 +446,17 @@ static t_eReturnCode s_APPSIG_OperationalState(void)
     {
         //---- Call Rx Signal Managment ----//
         Ret_e = s_APPSIG_Ope_TxSignalMngmt();
-    }
-    if(Ret_e >= RC_OK)
-    {
+        if(Ret_e < RC_OK)
+        {
+            ASSERT((t_uint16)Ret_e);
+        }
+
         //---- Call Rx Diagnostic Mngmt ----//
-        s_APPSIG_Ope_RxDiagnosticMngmt();
+        Ret_e = s_APPSIG_Ope_RxDiagnosticMngmt();
+        if(Ret_e < RC_OK)
+        {
+            ASSERT((t_uint16)Ret_e);
+        }
     }
 
     return Ret_e;
@@ -570,9 +576,9 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
     t_eReturnCode Ret_e;
     t_uint16 idxMsg_u16;
     t_uint32 currentTime_u32;
-    t_sAPPSIG_MsgInfo * msgInfo_pas;
-    t_cbAPPSIG_SendFrameMsg * sendMsgCallback_pf;
-    t_sAPPSIG_MsgTimestamp * msgTimeStamp_pas;
+    t_sAPPSIG_MsgInfo * msgInfo_pas = (t_sAPPSIG_MsgInfo *)NULL;
+    t_cbAPPSIG_SendFrameMsg * sendMsgCallback_pf = (t_cbAPPSIG_SendFrameMsg *)NULL;
+    t_sAPPSIG_MsgTimestamp * msgTimeStamp_pas = (t_sAPPSIG_MsgTimestamp *)NULL;
     t_uint16 nbMsg_u16; 
 
     if(f_msgGate_e >= APPSIG_MSG_ORIGIN_NB)
