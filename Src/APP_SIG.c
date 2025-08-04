@@ -15,7 +15,6 @@
 #include "APP_CFG/ConfigFiles/APPSIG_ConfigPrivate.h"
 #include "APP_CTRL/APP_SDM/Src/APP_SDM.h"
 
-
 #include "Library/Queue/Src/LIBQueue.h"
 #include "Library/SafeMem/SafeMem.h"
 
@@ -139,6 +138,14 @@ static t_eReturnCode s_APPSIG_InitializeSrlGate(void);
 *
 *
 */
+static t_eReturnCode s_APPSIG_InitializeCanGate(void);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
 static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayload_s, 
                                                 t_sAPPSIG_MsgInfo ** f_msgInfo_ps);
 
@@ -187,7 +194,7 @@ static t_eReturnCode s_APPSIG_SendSrlFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps);
 static t_eReturnCode s_APPSIG_SendCanFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps);
 /**
 *
-*	@brief      Configure the Wire Serial Line.
+*	@brief      Function call by serial / CAN
 *	@note   	 
 *
 *
@@ -195,6 +202,9 @@ static t_eReturnCode s_APPSIG_SendCanFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps);
 static void s_APPSIG_SerialRcvCallback( t_uint8 * f_rxData_pu8, 
                                         t_uint16 f_dataSize_u16, 
                                         t_eFMKSRL_RxCallbackInfo f_InfoCb_e);
+static void s_APPSIG_CanRcvCallback(t_eFMKFDCAN_NodeList f_Node_e,
+                                                t_sFMKFDCAN_RxItemEvent f_RxItem_s, 
+                                                t_eFMKFDCAN_NodeStatus f_NodeStatus_e);
 /**
 *
 *	@brief      Configure the Wire Serial Line.
@@ -359,7 +369,7 @@ t_eReturnCode APPSIG_SetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 f_val
     else 
     {
         Ret_e = RC_OK;
-        g_signalValue_af32[(t_uint8)f_signal_e] = f_value_f32;
+        g_signalValue_af32[f_signal_e] = f_value_f32;
     }
 
     return Ret_e;
@@ -417,11 +427,16 @@ static t_eReturnCode s_APPSIG_ConfigurationState(void)
     //---- get the port gate configuration and initialize the Port ----//
     if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
     {
-        //Ret_e = s_APPSIG_InitializeCANGate();
+        Ret_e = s_APPSIG_InitializeCANGate();
     }
     if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
     {
         Ret_e = s_APPSIG_InitializeSrlGate();
+    }
+    if(Ret_e == RC_WARNING_NO_OPERATION)
+    {
+        //---- the module is inactive but allow to be in ope mode ----//
+        Ret_e = RC_OK;
     }
 
     return Ret_e;
@@ -875,6 +890,7 @@ static t_eReturnCode s_APPSIG_MsgEncoder(   t_uint8 * f_data_pu8,
 
     return Ret_e;
 }
+
 /*********************************
  * s_APPSIG_InitializeSrlGate
  *********************************/
@@ -904,6 +920,27 @@ static t_eReturnCode s_APPSIG_InitializeSrlGate(void)
                                             FMKSRL_OPE_RX_CYCLIC_SIZE,
                                             APPSIG_SRL_DATA_PAYLOAD_LEN);
     }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_InitializeCanGate
+ *********************************/
+static t_eReturnCode s_APPSIG_InitializeCanGate(void)
+{
+    t_eReturnCode Ret_e;
+
+    t_sFMKFDCAN_RxItemEventCfg rxItemEvnCfg_s = {
+        .ItemId_s.Identifier_u32 = APPSIG_CAN_ID_COMMON,
+        .ItemId_s.FramePurpose_e = FMKFDCAN_FRAME_PURPOSE_DATA,
+        .ItemId_s.IdType_e = FMKFDCAN_IDTYPE_EXTENDED,
+        .Dlc_e = FMKFDCAN_DLC_8,
+        .maskId_u32 = APPSIG_CAN_ID_MASK,
+        .callback_cb = s_APPSIG_CanRcvCallback
+    };
+
+    Ret_e = FMKFDCAN_ConfigureRxItemEvent(APPSIG_PORTGATE_CAN_NODE, rxItemEvnCfg_s);
 
     return Ret_e;
 }
@@ -963,26 +1000,83 @@ static void s_APPSIG_SerialRcvCallback( t_uint8 * f_rxData_pu8,
         }
         if(receptionComplete_b == (t_bool)True)
         {
-            //---- copy into buffer ----//
-            msgPayload_s.msgId_u32 = (t_uint32)s_RxBuffer_ua8[0];
-            msgPayload_s.origin_e = APPSIG_MSG_ORIGIN_SRL;
-            (void)SafeMem_memcpy(   msgPayload_s.data_ua8, 
-                                    &s_RxBuffer_ua8[1], 
-                                    (sizeof(t_uint8) * APPSIG_DATA_PAYLOAD_LEN));
-            Ret_e = LIBQUEUE_WriteElement(  &g_RxSoftQueueMngmt_s, 
-                                            &msgPayload_s, 
-                                            sizeof(t_sAPPSIG_msgPayload));
+            if((s_RxBuffer_ua8[0] != APPSIG_SRL_START_BYTE_0)
+            || (s_RxBuffer_ua8[1] != APPSIG_SRL_START_BYTE_1))
+            {
+                ASSERT((t_uint16)(s_RxBuffer_ua8[0] << (t_uint8)8 | s_RxBuffer_ua8[1]));
+            }
+            else 
+            {
+                //---- copy into buffer ----//
+                msgPayload_s.msgId_u32 = (t_uint32)s_RxBuffer_ua8[0];
+                msgPayload_s.origin_e = APPSIG_MSG_ORIGIN_SRL;
+                (void)SafeMem_memcpy(   msgPayload_s.data_ua8, 
+                                        &s_RxBuffer_ua8[1], 
+                                        (sizeof(t_uint8) * APPSIG_DATA_PAYLOAD_LEN));
+                Ret_e = LIBQUEUE_WriteElement(  &g_RxSoftQueueMngmt_s, 
+                                                &msgPayload_s, 
+                                                sizeof(t_sAPPSIG_msgPayload));
 
+                if(Ret_e != RC_OK)
+                {
+                    ASSERT((t_uint16)Ret_e);
+                }
+                else 
+                {
+                    (void)SafeMem_memclear( s_RxBuffer_ua8, 
+                                            (sizeof(t_uint8) * APPSIG_DATA_PAYLOAD_LEN));
+                }
+            } 
+        }
+    }
+
+    return;
+}
+
+/*********************************
+ * s_APPSIG_CanRcvCallback
+ *********************************/
+static void s_APPSIG_CanRcvCallback(t_eFMKFDCAN_NodeList f_Node_e,
+                                    t_sFMKFDCAN_RxItemEvent f_RxItem_s, 
+                                    t_eFMKFDCAN_NodeStatus f_NodeStatus_e)
+{
+    t_eReturnCode Ret_e;
+    t_sAPPSIG_msgPayload msgPayload_s;
+
+    if(f_Node_e != APPSIG_PORTGATE_CAN_NODE)
+    {
+        ASSERT((t_uint16)f_Node_e);
+    }
+    else if(f_RxItem_s.CanMsg_s.Dlc_e != APPSIG_DATA_PAYLOAD_LEN)
+    {
+        ASSERT((t_uint16)f_RxItem_s.CanMsg_s.Dlc_e);
+    }
+    else if(f_NodeStatus_e != FMKFDCAN_NODE_STATE_OK)
+    {
+        ASSERT((t_uint16)f_NodeStatus_e);
+    }
+    else 
+    {
+        msgPayload_s.msgId_u32 = (t_uint32)f_RxItem_s.ItemId_s.Identifier_u32;
+        msgPayload_s.origin_e = APPSIG_MSG_ORIGIN_CAN;
+
+        Ret_e = SafeMem_memcpy( &msgPayload_s.data_ua8, 
+                                f_RxItem_s.CanMsg_s.data_pu8,
+                                (t_uint16)APPSIG_DATA_PAYLOAD_LEN);
+        if(Ret_e != RC_OK)
+        {
+            ASSERT((t_uint16)Ret_e);
+        }
+        else 
+        {
+            Ret_e = LIBQUEUE_WriteElement(  &g_RxSoftQueueMngmt_s,
+                                            &msgPayload_s,
+                                            sizeof(t_sAPPSIG_msgPayload));
             if(Ret_e != RC_OK)
             {
                 ASSERT((t_uint16)Ret_e);
             }
-            else 
-            {
-                (void)SafeMem_memclear( s_RxBuffer_ua8, 
-                                        (sizeof(t_uint8) * APPSIG_DATA_PAYLOAD_LEN));
-            }            
-        }
+        }      
     }
 
     return;
@@ -1075,15 +1169,17 @@ static void s_APPSIG_InsertRawValue(    t_uint8 *f_data_pu8,
 static t_eReturnCode s_APPSIG_SendSrlFrame(t_sAPPSIG_MsgInfo * f_msgInfo_ps)
 {
     t_eReturnCode Ret_e;
-    t_uint8 msgData_au8[APPSIG_SRL_DATA_PAYLOAD_LEN];;
+    t_uint8 msgData_au8[APPSIG_SRL_DATA_PAYLOAD_LEN];
 
     //---- Initialize data container ----//
     memset(msgData_au8, (t_uint8)0, (sizeof(t_uint8) * APPSIG_SRL_DATA_PAYLOAD_LEN));
 
     //---- first byte is for the Id ----//
-    msgData_au8[0] = (t_uint8)f_msgInfo_ps->msgId_u32;
+    msgData_au8[0] = (t_uint8)APPSIG_SRL_START_BYTE_0;
+    msgData_au8[1] = (t_uint8)APPSIG_SRL_START_BYTE_1;
+    msgData_au8[2] = (t_uint8)f_msgInfo_ps->msgId_u32;
 
-    Ret_e = s_APPSIG_MsgEncoder(&msgData_au8[1], f_msgInfo_ps);
+    Ret_e = s_APPSIG_MsgEncoder(&msgData_au8[3], f_msgInfo_ps);
 
     if(Ret_e == RC_OK)
     {
