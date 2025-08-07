@@ -427,7 +427,7 @@ static t_eReturnCode s_APPSIG_ConfigurationState(void)
     //---- get the port gate configuration and initialize the Port ----//
     if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
     {
-        Ret_e = s_APPSIG_InitializeCANGate();
+        Ret_e = s_APPSIG_InitializeCanGate();
     }
     if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
     {
