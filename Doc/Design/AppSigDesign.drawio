@@ -246,7 +246,7 @@
         <mxCell id="g4551xgq30ixxJtdsjzT-113" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-112">
           <mxGeometry width="499.99999999999994" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="g4551xgq30ixxJtdsjzT-114" value="t_sAPPSIG_MsgInfo&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-112">
+        <mxCell id="g4551xgq30ixxJtdsjzT-114" value="t_sAPPSIG_MsgCfg&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-112">
           <mxGeometry width="499.99999999999994" height="40" as="geometry" />
         </mxCell>
         <mxCell id="g4551xgq30ixxJtdsjzT-115" value="&lt;div style=&quot;text-align: center; font-size: 12px;&quot;&gt;c_AppSig_SrlMsgMapping_pae[APPSIG_SRL_MSG_NB]&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-112">
@@ -258,7 +258,7 @@
         <mxCell id="g4551xgq30ixxJtdsjzT-117" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-116">
           <mxGeometry width="499.99999999999994" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="g4551xgq30ixxJtdsjzT-118" value="t_sAPPSIG_MsgInfo&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-116">
+        <mxCell id="g4551xgq30ixxJtdsjzT-118" value="t_sAPPSIG_MsgCfg&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-116">
           <mxGeometry width="499.99999999999994" height="40" as="geometry" />
         </mxCell>
         <mxCell id="g4551xgq30ixxJtdsjzT-119" value="&lt;div style=&quot;text-align: center; font-size: 12px;&quot;&gt;c_AppSig_CANMsg_Signals_pae[APPSIG_CAN_MSG_NB]&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;gradientColor=#ffd966;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="g4551xgq30ixxJtdsjzT-116">
@@ -290,7 +290,7 @@
         <mxCell id="g4551xgq30ixxJtdsjzT-127" value="APPSIG_SIGNAL_DIR_NB" style="text;strokeColor=#b85450;fillColor=#f8cecc;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;gradientColor=#ea6b66;fontColor=#000000;" vertex="1" parent="g4551xgq30ixxJtdsjzT-122">
           <mxGeometry y="130" width="240" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="HNbPgWdcnhAspwHtx7QN-1" value="Struct: t_sAPPSIG_MsgInfo in cfgPriv" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;gradientColor=#7ea6e0;strokeColor=#6c8ebf;fontColor=#000000;" vertex="1" parent="1">
+        <mxCell id="HNbPgWdcnhAspwHtx7QN-1" value="Struct: t_sAPPSIG_MsgCfg in cfgPriv" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;gradientColor=#7ea6e0;strokeColor=#6c8ebf;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="-1090" y="-2120" width="280" height="160" as="geometry">
             <mxRectangle x="-560" y="-640" width="240" height="40" as="alternateBounds" />
           </mxGeometry>

@@ -24,8 +24,14 @@
     // ********************************************************************
     // *                      Types
     // ********************************************************************
-
-    //-----------------------------ENUM TYPES-----------------------------//
+    /**
+     * @brief Callback user to be noticed whenever a reception
+     *         of a certain msg has arrived
+     * @param[in] f_msgID_u16 : msg identifier from t_eAPPSIG_SrlMsgList or t_eAPPSIG_CanMsgList
+     * @param[in] f_origine_e : CAN or SERIAL msg identifier
+     */
+   typedef void (t_cbAPPSIG_SignalRcvCallback)(t_eAPPSIG_Signal f_signal_e, t_float32 f_sigValue_f32);
+   //-----------------------------ENUM TYPES-----------------------------//
     /* CAUTION : Automatic generated code section for Enum: Start */
 
     /* CAUTION : Automatic generated code section for Enum: End */
@@ -96,11 +102,29 @@
     *
     */
     t_eReturnCode APPSIG_GetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 * f_value_pf32);
-
-    t_eReturnCode APPSIG_AddSomeToQueue(t_uint8 *f_data_pu8);
-    //********************************************************************************
-    //                      Public functions - Prototyupes
-    //********************************************************************************
+   /**
+    *
+    *	@brief
+    *	@note   
+    *
+    *
+    *	@param[in] 
+    *
+    */
+   t_eReturnCode APPSIG_AddRcvMsgCallback(t_eAPPSIG_Signal f_signal_e, 
+                                          t_cbAPPSIG_SignalRcvCallback * f_msgRcvCallback_pcb);
+   /**
+    *
+    *	@brief
+    *	@note   
+    *
+    *
+    *	@param[in] 
+    *
+    */
+   //********************************************************************************
+   //                      Public functions - Prototyupes
+   //********************************************************************************
      
  #endif // LIBRAMP_H_INCLUDED
  //************************************************************************************
