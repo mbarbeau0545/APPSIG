@@ -36,7 +36,7 @@
 
     ///@brief Number of data expected to be received 
     #define APPSIG_DATA_PAYLOAD_LEN  ((t_uint8)8)       // For CAN
-    #define APPSIG_SRL_DATA_PAYLOAD_LEN ((t_uint8)11)    // for Serial
+    #define APPSIG_SRL_FRAME_PAYLOAD_LEN ((t_uint8)11)    // for Serial
 
     ///@brief start byte for serial comm 
     #define APPSIG_SRL_START_BYTE_0 ((t_uint8)0xAA)
@@ -105,7 +105,7 @@
         t_uint16 msgTimeout_u16;                //---- Time upon if a msg is not receive a Deev will be raise ----//             
         const t_sAPPSIG_MsgSignalsCfg * msgSignalsCfg_pas;      //---- signal in the message ----// 
         t_uint8 nbSignal_u8;
-    } t_sAPPSIG_MsgInfo;
+    } t_sAPPSIG_MsgCfg;
 
     
 	/* CAUTION : Automatic generated code section : Start */
@@ -161,13 +161,13 @@
 
 
     ///@brief Serial Message Information
-    const t_sAPPSIG_MsgInfo c_AppSig_SrlMsgCfg_as[APPSIG_SRL_MSG_NB] = {
+    const t_sAPPSIG_MsgCfg c_AppSig_SrlMsgCfg_as[APPSIG_SRL_MSG_NB] = {
     //  Identifier                                          Direction                                                CyclicSend                                                 TimeOut                                                         Sig Cfg                                         nbSignal
     {APPSIG_SRL_ID_APPLICATIONINFO1,                         APPSIG_MSG_DIR_TX,                                      (t_uint16)500,                                          (t_uint16)0,                                            c_AppSig_Srl_ApplicationInfo1_as,                       (t_uint8)15}, // APPSIG_SRL_APPLICATIONINFO1
     };
 
     ///@brief CAN Message Information
-    const t_sAPPSIG_MsgInfo c_AppSig_CanMsgCfg_as[APPSIG_CAN_MSG_NB] = {
+    const t_sAPPSIG_MsgCfg c_AppSig_CanMsgCfg_as[APPSIG_CAN_MSG_NB] = {
     //  Identifier                                          Direction                                                CyclicSend                                                 TimeOut                                                         Sig Cfg                                         nbSignal
     };
 
