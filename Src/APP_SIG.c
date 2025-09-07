@@ -127,7 +127,7 @@ static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void);
 *
 *
 */
-static t_eReturnCode s_APPSIG_Ope_TxSignalMngmt(void);
+static t_eReturnCode s_APPSIG_FastTask_TxSignalMngmt(void);
 /**
 *
 *	@brief      Configure the Wire Serial Line.
@@ -205,7 +205,22 @@ static t_eReturnCode s_APPSIG_MsgEncoder(   t_uint8 * f_data_pu8,
 *
 */
 static t_eReturnCode s_APPSIG_SendSrlFrame(t_sAPPSIG_MsgCfg * f_msgInfo_ps);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
 static t_eReturnCode s_APPSIG_SendCanFrame(t_sAPPSIG_MsgCfg * f_msgInfo_ps);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
+static void s_APPSIG_FastTask(void);
 /**
 *
 *	@brief      Function call by serial / CAN
@@ -327,7 +342,12 @@ t_eReturnCode APPSIG_Cyclic(void)
         }
         case STATE_CYCLIC_PREOPE:
         {
-            g_AppSig_ModState_e = STATE_CYCLIC_OPE;
+            Ret_e = APPSYS_SetFastTaskState(APPSYS_MODULE_APP_SIG,
+                                            APPSYS_FAST_TASK_ENABLE);
+            if(Ret_e == RC_OK)
+            {
+                g_AppSig_ModState_e = STATE_CYCLIC_OPE;
+            }
             break;
         }
         case STATE_CYCLIC_OPE:
@@ -497,6 +517,10 @@ static t_eReturnCode s_APPSIG_ConfigurationState(void)
         //---- the module is inactive but allow to be in ope mode ----//
         Ret_e = RC_OK;
     }
+    if(Ret_e == RC_OK)
+    {
+        APPSYS_AddFastTask(APPSYS_MODULE_APP_SIG, s_APPSIG_FastTask);
+    }
 
     return Ret_e;
 }
@@ -515,15 +539,6 @@ static t_eReturnCode s_APPSIG_OperationalState(void)
     {
         ASSERT((t_uint16)Ret_e);
         Ret_e = RC_OK;
-    }
-    if(Ret_e >= RC_OK)
-    {
-        //---- Call Rx Signal Managment ----//
-        Ret_e = s_APPSIG_Ope_TxSignalMngmt();
-        if(Ret_e < RC_OK)
-        {
-            ASSERT((t_uint16)Ret_e);
-        }
     }
     if(Ret_e >= RC_OK)
     {
@@ -594,9 +609,9 @@ static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void)
 }
 
 /*********************************
- * s_APPSIG_Ope_TxSignalMngmt
+ * s_APPSIG_FastTask_TxSignalMngmt
  *********************************/
-static t_eReturnCode s_APPSIG_Ope_TxSignalMngmt(void)
+static t_eReturnCode s_APPSIG_FastTask_TxSignalMngmt(void)
 {
     t_eReturnCode Ret_e;
         
@@ -1303,6 +1318,22 @@ static t_eReturnCode s_APPSIG_SendCanFrame(t_sAPPSIG_MsgCfg * f_msgInfo_ps)
         }
     }
     return Ret_e;
+}
+
+/*********************************
+ * s_APPSIG_FastTask
+ *********************************/
+static void s_APPSIG_FastTask(void)
+{
+    t_eReturnCode Ret_e;
+    //---- Call Rx Signal Managment ----//
+    Ret_e = s_APPSIG_FastTask_TxSignalMngmt();
+    if(Ret_e < RC_OK)
+    {
+        ASSERT((t_uint16)Ret_e);
+    }
+
+    return;
 }
 
 /*********************************
