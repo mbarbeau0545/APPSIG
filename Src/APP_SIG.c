@@ -84,6 +84,8 @@ t_sAPPSIG_SignalInfo g_signalInfo_as[APPSIG_SIGNAL_NB];
 t_sAPPSIG_MsgInfo g_SrlSMsgInfo_as[APPSIG_SRL_MSG_NB];
 t_sAPPSIG_MsgInfo g_CANSMsgInfo_as[APPSIG_CAN_MSG_NB];
 
+///@brief varaible to know the direction of the msg depedning on ecu 
+t_eAPPSYS_EcuPos g_EcuId_e = APPSYS_ECU_POS_NB;
 /**
 *
 *	@brief      Configure the Wire Serial Line.
@@ -332,12 +334,8 @@ t_eReturnCode APPSIG_Cyclic(void)
 
             if(Ret_e == RC_OK)
             {
-                g_AppSig_ModState_e = STATE_CYCLIC_WAITING;
+                g_AppSig_ModState_e = STATE_CYCLIC_PREOPE;
             }
-            break;
-        }
-        case STATE_CYCLIC_WAITING:
-        {
             break;
         }
         case STATE_CYCLIC_PREOPE:
@@ -503,23 +501,30 @@ static t_eReturnCode s_APPSIG_ConfigurationState(void)
 {
     t_eReturnCode Ret_e = RC_WARNING_NO_OPERATION;
 
-    //---- get the port gate configuration and initialize the Port ----//
-    if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
-    {
-        Ret_e = s_APPSIG_InitializeCanGate();
-    }
-    if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
-    {
-        Ret_e = s_APPSIG_InitializeSrlGate();
-    }
-    if(Ret_e == RC_WARNING_NO_OPERATION)
-    {
-        //---- the module is inactive but allow to be in ope mode ----//
-        Ret_e = RC_OK;
-    }
+    //---- first get the ecu Id for this software ----//
+    Ret_e = APPSYS_GetEcuPosition(&g_EcuId_e);
     if(Ret_e == RC_OK)
     {
-        APPSYS_AddFastTask(APPSYS_MODULE_APP_SIG, s_APPSIG_FastTask);
+        //---- get the port gate configuration and initialize the Port ----//
+        if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_CAN) == BIT_IS_SET_32B)
+        {
+            Ret_e = s_APPSIG_InitializeCanGate();
+            FMKSRL_LOG("[SIG] : CAN Gate Init\r\n");
+        }
+        if(GETBIT(APPSIG_PORTGATE_CFG, APPSIG_PORTGATE_SRL) == BIT_IS_SET_32B)
+        {
+            Ret_e = s_APPSIG_InitializeSrlGate();
+            FMKSRL_LOG("[SIG] : CAN Serial Init\r\n");
+        }
+        if(Ret_e == RC_WARNING_NO_OPERATION)
+        {
+            //---- the module is inactive but allow to be in ope mode ----//
+            Ret_e = RC_OK;
+        }
+        if(Ret_e == RC_OK)
+        {
+            APPSYS_AddFastTask(APPSYS_MODULE_APP_SIG, s_APPSIG_FastTask);
+        }
     }
 
     return Ret_e;
@@ -673,6 +678,7 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
     t_eReturnCode Ret_e;
     t_uint16 idxMsg_u16;
     t_uint32 currentTime_u32;
+    t_eAPPSIG_MsgDirection direction_e;
     t_sAPPSIG_MsgCfg * msgCfg_pas = (t_sAPPSIG_MsgCfg *)NULL;
     t_sAPPSIG_MsgInfo * msgInfo_pas = (t_sAPPSIG_MsgInfo *)NULL;
     t_cbAPPSIG_SendFrameMsg * sendMsgCallback_pf = (t_cbAPPSIG_SendFrameMsg *)NULL;
@@ -713,8 +719,11 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
         && (Ret_e == RC_OK) ;
         idxMsg_u16++)
         {
-            if( ((msgCfg_pas[idxMsg_u16].direction_e == APPSIG_MSG_DIR_TX)
-            ||   (msgCfg_pas[idxMsg_u16].direction_e == APPSIG_MSG_DIR_RX_TX))
+            //---- reach direction depending on ecu Id ----//
+            direction_e = msgCfg_pas[idxMsg_u16].direction_ae[g_EcuId_e];
+
+            if( ((direction_e == APPSIG_MSG_DIR_TX)
+            ||   (direction_e == APPSIG_MSG_DIR_RX_TX))
             && (((currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32) > 
                                                         (t_uint32)msgCfg_pas[idxMsg_u16].msgCycleSend_u16)))
             {
@@ -741,7 +750,8 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
     t_eReturnCode Ret_e;
     t_uint32 currentTime_u32;
     t_uint16 idxMsg_u16;
-    t_uint16 nbMsg_u16; 
+    t_uint16 nbMsg_u16;
+    t_eAPPSIG_MsgDirection direction_e;
     t_sAPPSIG_MsgInfo * msgInfo_pas = NULL;
     t_sAPPSIG_MsgCfg * msgCfg_pas = NULL;
 
@@ -777,9 +787,13 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
             for(idxMsg_u16 = (t_uint16)0 ; idxMsg_u16 < nbMsg_u16 ; idxMsg_u16++)
             {
                 //----for receive message that are not receive often
-                //      user put 65535 to say : don't check the signal 
-                if((msgCfg_pas[idxMsg_u16].direction_e == APPSIG_MSG_DIR_RX)
-                || (msgCfg_pas[idxMsg_u16].direction_e == APPSIG_MSG_DIR_RX_TX))
+                //      user put 65535 to say : don't check the signal
+
+                //---- reach direction depending on ecu Id ----//
+                direction_e = msgCfg_pas[idxMsg_u16].direction_ae[g_EcuId_e];
+
+                if((direction_e == APPSIG_MSG_DIR_RX)
+                || (direction_e == APPSIG_MSG_DIR_RX_TX))
                 {
                     if(((currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeRcv_u32)
                         > (t_uint32)msgCfg_pas[idxMsg_u16].msgTimeout_u16)
