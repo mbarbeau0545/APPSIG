@@ -63,6 +63,8 @@ typedef struct
 typedef struct 
 {
     t_float32 value_f32;                                                                    //---- current value of the signal -----//
+    t_bool isValid_b;                                                                       //---- Flag to know of the value is valid ----//
+    t_bool isRcvOnce_b;                                                                     //---- Flag to know of the value has been at least rcv once ----//
     t_cbAPPSIG_SignalRcvCallback  * rcvCallback_pacb[APPSIG_MSG_RCV_SUBSRIBERS_MAX];        //---- array of callback for notice update signals ----//
 } t_sAPPSIG_SignalInfo;
 //-----------------------------TYPEDEF TYPES---------------------------//
@@ -295,6 +297,9 @@ t_eReturnCode APPSIG_Init(void)
     for(LLI_u16 = (t_uint16)0 ; LLI_u16 < (t_uint16)APPSIG_SIGNAL_NB ; LLI_u16++)
     {
         g_signalInfo_as[LLI_u16].value_f32 = (t_float32)-1.0f;
+        g_signalInfo_as[LLI_u16].isRcvOnce_b = FALSE;
+        g_signalInfo_as[LLI_u16].isValid_b = FALSE;
+
         for(LLI2_u8 = (t_uint8)0 ; LLI2_u8 < APPSIG_MSG_RCV_SUBSRIBERS_MAX ; LLI2_u8++)
         {
             g_signalInfo_as[LLI_u16].rcvCallback_pacb[LLI2_u8] = NULL_FUNCTION;
@@ -415,6 +420,11 @@ t_eReturnCode APPSIG_SetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 f_val
     {
         Ret_e = RC_OK;
         g_signalInfo_as[f_signal_e].value_f32 = f_value_f32;
+
+        if(g_signalInfo_as[f_signal_e].isValid_b == FALSE)
+        {   
+            g_signalInfo_as[f_signal_e].isValid_b = TRUE;
+        }
     }
 
     return Ret_e;
@@ -439,8 +449,17 @@ t_eReturnCode APPSIG_GetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 * f_v
     }
     else 
     {
-        Ret_e = RC_OK;
-        *f_value_pf32 =  (t_float32)g_signalInfo_as[f_signal_e].value_f32;
+        if((g_signalInfo_as[f_signal_e].isValid_b == FALSE)
+        || (g_signalInfo_as[f_signal_e].isRcvOnce_b == FALSE))
+        {
+            *f_value_pf32 = 0.0f;
+            Ret_e = RC_WARNING_NO_OPERATION;
+        }
+        else 
+        {
+            Ret_e = RC_OK;
+            *f_value_pf32 =  (t_float32)g_signalInfo_as[f_signal_e].value_f32;
+        }
     }
 
     return Ret_e;
@@ -594,13 +613,21 @@ static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void)
             //---- get the pointor for the message ----// 
             taskRet_e = s_APPSIG_FindSignalMapping(msgPayload_s, &msgCfg_ps, &msgId_u16);
 
-            if(taskRet_e == RC_OK)
+            //---- it means this msg is configured but we're not dealing the msg ----//
+            if(taskRet_e == RC_WARNING_NO_OPERATION)
             {
-                taskRet_e = s_APPSIG_MsgDecoder(msgPayload_s.data_ua8, msgCfg_ps);
+                Ret_e =RC_OK;
             }
-            if(taskRet_e == RC_OK)
+            else 
             {
-                taskRet_e = s_APPSIG_BroadcastUpdate(msgCfg_ps);
+                if(taskRet_e == RC_OK)
+                {
+                    taskRet_e = s_APPSIG_MsgDecoder(msgPayload_s.data_ua8, msgCfg_ps);
+                }
+                if(taskRet_e == RC_OK)
+                {
+                    taskRet_e = s_APPSIG_BroadcastUpdate(msgCfg_ps);
+                }
             }
         } 
     }
@@ -750,6 +777,7 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
     t_eReturnCode Ret_e;
     t_uint32 currentTime_u32;
     t_uint16 idxMsg_u16;
+    t_uint8 idxSignal_u8;
     t_uint16 nbMsg_u16;
     t_eAPPSIG_MsgDirection direction_e;
     t_sAPPSIG_MsgInfo * msgInfo_pas = NULL;
@@ -803,6 +831,13 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                                                 APPSDM_DIAG_ITEM_REPORT_FAIL,
                                                 (t_uint16)idxMsg_u16,
                                                 (t_uint16)f_msgGate_e);
+                        
+                        //---- also update validity of signal in this message ----//
+                        for(idxSignal_u8 = (t_uint8)0 ; idxSignal_u8 < msgCfg_pas->nbSignal_u8 ; idxSignal_u8++)
+                        {
+                            t_eAPPSIG_Signal sigID_e = (msgCfg_pas->msgSignalsCfg_pas[idxSignal_u8].signal_e);
+                            g_signalInfo_as[sigID_e].isValid_b = FALSE;
+                        }
                     }
                 }
             }
@@ -822,6 +857,7 @@ static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayloa
     t_eReturnCode Ret_e;
     t_sAPPSIG_MsgCfg * msgPortGateCfg_pas;
     t_sAPPSIG_MsgInfo * msgInfo_pas;
+    t_eAPPSIG_MsgDirection direction_e;
     t_uint16 idxMsgPrt_u16;
     t_uint16 msgPortNb_u16;
     t_uint32 currentTime_u32;
@@ -866,16 +902,26 @@ static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayloa
             && (msgFound_b == FALSE) ; 
             idxMsgPrt_u16++)
             {
+                //---- only work on msg != from UNUSED ----//
+                direction_e = msgPortGateCfg_pas[idxMsgPrt_u16].direction_ae[g_EcuId_e];            
+
                 if(msgPortGateCfg_pas[idxMsgPrt_u16].msgId_u32 == (t_uint32)f_msgPayload_s.msgId_u32)
                 {
-                    *f_msgCfg_ps = &msgPortGateCfg_pas[idxMsgPrt_u16];
-                    *f_msgId_pu16 = idxMsgPrt_u16;
-                    //---- update last time msg received ----//
-                    FMKCPU_GetTick(&currentTime_u32);
-                    msgInfo_pas[idxMsgPrt_u16].timeStamp_s.lastTimeRcv_u32 = currentTime_u32;
-                    //---- success -> out of loop ----//
+                    if(direction_e == APPSIG_MSG_DIR_UNUSED)
+                    {
+                        Ret_e = RC_WARNING_NO_OPERATION;
+                    }
+                    else // RX oR RX_TX
+                    {
+                        *f_msgCfg_ps = &msgPortGateCfg_pas[idxMsgPrt_u16];
+                        *f_msgId_pu16 = idxMsgPrt_u16;
+                        //---- update last time msg received ----//
+                        FMKCPU_GetTick(&currentTime_u32);
+                        msgInfo_pas[idxMsgPrt_u16].timeStamp_s.lastTimeRcv_u32 = currentTime_u32;
+                        //---- success -> out of loop ----//
+                        Ret_e = RC_OK;
+                    }
                     msgFound_b = TRUE;
-                    Ret_e = RC_OK;
                 }
             }
         }
@@ -925,14 +971,24 @@ static t_eReturnCode s_APPSIG_MsgDecoder(   t_uint8 * f_data_pu8,
             else
             {
                 // pointer to signal configuration startbit and lenght ----//
-                signalCfg_ps = (t_sAPPSIG_SigCfg *)&c_AppSig_SignalCfg_as[(t_uint16)signalId_e];
+                signalCfg_ps = (t_sAPPSIG_SigCfg *)&c_AppSig_SignalCfg_as[signalId_e];
                 rawValue_u32 = (t_uint32)s_APPSIG_ExtractRawValue(  f_data_pu8,
                                                                     msgSignalsCfg_pas[idxSignal_u8].startBit_u8,
                                                                     signalCfg_ps->bitLenght_u8,
                                                                     signalCfg_ps->sigEncode_e);
 
                 sigVal_f32 = (t_float32)rawValue_u32 * signalCfg_ps->factor_f32 + (t_float32)signalCfg_ps->offset_s16;
-                g_signalInfo_as[(t_uint16)signalId_e].value_f32 = (t_float32)sigVal_f32;
+                g_signalInfo_as[signalId_e].value_f32 = (t_float32)sigVal_f32;
+
+                //---- update flag ----//
+                if(g_signalInfo_as[signalId_e].isRcvOnce_b == FALSE)
+                {
+                    g_signalInfo_as[signalId_e].isRcvOnce_b = TRUE;
+                }
+                if(g_signalInfo_as[signalId_e].isValid_b == FALSE)
+                {
+                    g_signalInfo_as[signalId_e].isValid_b = TRUE;
+                }
             }
         }
     }
