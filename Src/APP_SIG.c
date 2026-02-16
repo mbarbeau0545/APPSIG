@@ -616,7 +616,7 @@ static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void)
             //---- it means this msg is configured but we're not dealing the msg ----//
             if(taskRet_e == RC_WARNING_NO_OPERATION)
             {
-                Ret_e =RC_OK;
+                taskRet_e = RC_OK;
             }
             else 
             {
@@ -977,7 +977,7 @@ static t_eReturnCode s_APPSIG_MsgDecoder(   t_uint8 * f_data_pu8,
                                                                     signalCfg_ps->bitLenght_u8,
                                                                     signalCfg_ps->sigEncode_e);
 
-                sigVal_f32 = (t_float32)rawValue_u32 * signalCfg_ps->factor_f32 + (t_float32)signalCfg_ps->offset_s16;
+                sigVal_f32 = (t_float32)rawValue_u32 * signalCfg_ps->factor_f32 + (t_float32)signalCfg_ps->offset_s32;
                 g_signalInfo_as[signalId_e].value_f32 = (t_float32)sigVal_f32;
 
                 //---- update flag ----//
@@ -1037,7 +1037,7 @@ static t_eReturnCode s_APPSIG_MsgEncoder(   t_uint8 * f_data_pu8,
                 signalCfg_ps = (t_sAPPSIG_SigCfg *)&c_AppSig_SignalCfg_as[(t_uint16)signalId_e];
                 sigVal_f32 = g_signalInfo_as[(t_uint16)(signalId_e)].value_f32;
 
-                rawValue_u32 = (t_uint32)((sigVal_f32 - (t_float32)signalCfg_ps->offset_s16) 
+                rawValue_u32 = (t_uint32)((sigVal_f32 - (t_float32)signalCfg_ps->offset_s32) 
                                         / (t_float32)signalCfg_ps->factor_f32);
 
                 s_APPSIG_InsertRawValue( f_data_pu8,
@@ -1197,7 +1197,7 @@ static void s_APPSIG_SerialRcvCallback( t_uint8 * f_rxData_pu8,
 /*********************************
  * s_APPSIG_CanRcvCallback
  *********************************/
-static void s_APPSIG_CanRcvCallback(t_eFMKFDCAN_NodeList f_Node_e,
+static void  s_APPSIG_CanRcvCallback(t_eFMKFDCAN_NodeList f_Node_e,
                                     t_sFMKFDCAN_RxItemEvent f_RxItem_s, 
                                     t_eFMKFDCAN_NodeStatus f_NodeStatus_e)
 {
