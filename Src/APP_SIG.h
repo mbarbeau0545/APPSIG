@@ -31,6 +31,16 @@
      * @param[in] f_origine_e : CAN or SERIAL msg identifier
      */
    typedef void (t_cbAPPSIG_SignalRcvCallback)(t_eAPPSIG_Signal f_signal_e, t_float32 f_sigValue_f32);
+   /**
+     * @brief Callback user to be noticed whenever a reception
+     *         of a certain msg has arrived
+     * @param[in] f_msgID_u16 : msg identifier from t_eAPPSIG_SrlMsgList or t_eAPPSIG_CanMsgList
+     * @param[in] f_origine_e : CAN or SERIAL msg identifier
+     */
+       typedef void (t_cbAPPSIG_MsgRcvCallback)(t_uint16 f_msgID_u16,
+                                                t_uint8 f_nbSignal_u8,
+                                                t_eAPPSIG_Signal *f_signal_ae, 
+                                                t_float32 *f_sigValue_af32);
    //-----------------------------ENUM TYPES-----------------------------//
     /* CAUTION : Automatic generated code section for Enum: Start */
 
@@ -111,7 +121,7 @@
     *	@param[in] 
     *
     */
-   t_eReturnCode APPSIG_AddRcvMsgCallback(t_eAPPSIG_Signal f_signal_e, 
+   t_eReturnCode APPSIG_AddRcvSigCallback(t_eAPPSIG_Signal f_signal_e, 
                                           t_cbAPPSIG_SignalRcvCallback * f_msgRcvCallback_pcb);
    /**
     *
@@ -122,6 +132,18 @@
     *	@param[in] 
     *
     */
+   /**
+    *
+    *	@brief
+    *	@note   
+    *
+    *
+    *	@param[in] 
+    *
+    */
+   t_eReturnCode APPSIG_AddRcvMsgCallback(  t_uint16 f_msgID_u16,
+                                            t_eAPPSIG_MsgOrigin f_msgOrigin_e,
+                                            t_cbAPPSIG_MsgRcvCallback * f_msgRcvCallback_pcb);
    //********************************************************************************
    //                      Public functions - Prototyupes
    //********************************************************************************

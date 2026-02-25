@@ -1,0 +1,1 @@
+problème de reconstitution d'un msg coté client 
