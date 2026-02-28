@@ -57,6 +57,7 @@ typedef struct
 typedef struct 
 {
     t_sAPPSIG_MsgTimestamp timeStamp_s;
+    t_bool forceSend_b;
     t_cbAPPSIG_MsgRcvCallback * rcvCallback_pacb[APPSIG_MSG_RCV_SUBSRIBERS_MAX];
 } t_sAPPSIG_MsgInfo;
 
@@ -317,6 +318,7 @@ t_eReturnCode APPSIG_Init(void)
     //---- init serial info ----//
     for(LLI_u16 = (t_uint16)0 ; LLI_u16 < (t_uint16)APPSIG_SRL_MSG_NB ; LLI_u16++)
     {
+        g_SrlSMsgInfo_as[LLI_u16].forceSend_b = FALSE;
         g_SrlSMsgInfo_as[LLI_u16].timeStamp_s.lastTimeRcv_u32 = (t_uint32)0;
         g_SrlSMsgInfo_as[LLI_u16].timeStamp_s.lastTimeSend_u32 = (t_uint32)0;
 
@@ -325,6 +327,7 @@ t_eReturnCode APPSIG_Init(void)
     //---- init CAN timestamp ----//
     for(LLI_u16 = (t_uint16)0 ; LLI_u16 < (t_uint16)APPSIG_CAN_MSG_NB ; LLI_u16++)
     {
+        g_CANSMsgInfo_as[LLI_u16].forceSend_b = FALSE;
         g_CANSMsgInfo_as[LLI_u16].timeStamp_s.lastTimeRcv_u32 = (t_uint32)0;
         g_CANSMsgInfo_as[LLI_u16].timeStamp_s.lastTimeSend_u32 = (t_uint32)0;
     }
@@ -473,6 +476,50 @@ t_eReturnCode APPSIG_GetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 * f_v
     return Ret_e;
 }
 
+/*********************************
+ * APPSIG_AddRcvSigCallback
+ *********************************/
+t_eReturnCode APPSIG_ForceMsgSend(t_eAPPSIG_MsgOrigin f_origin_e, t_uint16 f_msgID_u16)
+{
+    t_eReturnCode Ret_e;
+
+    if(f_origin_e >= APPSIG_MSG_ORIGIN_NB)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)0);
+    }
+    else if(g_AppSig_ModState_e !=  STATE_CYCLIC_OPE)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+    }
+    else 
+    {
+        Ret_e = RC_OK;
+        
+        if(f_origin_e == APPSIG_MSG_ORIGIN_CAN)
+        {
+            if(f_msgID_u16 >= (t_uint16)APPSIG_CAN_MSG_NB)
+            {
+                Ret_e = RC_ERROR_PARAM_INVALID;
+                ASSERT((t_uint16)0);
+            }
+
+            g_CANSMsgInfo_as[f_msgID_u16].forceSend_b = TRUE;
+        }
+        else 
+        {
+            if(f_msgID_u16 >= (t_uint16)APPSIG_SRL_MSG_NB)
+            {
+                Ret_e = RC_ERROR_PARAM_INVALID;
+                ASSERT((t_uint16)0);
+            }
+
+            g_SrlSMsgInfo_as[f_msgID_u16].forceSend_b = TRUE;
+        }
+    }
+
+    return Ret_e;
+}
 /*********************************
  * APPSIG_AddRcvSigCallback
  *********************************/
@@ -831,8 +878,9 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
 
             if( ((direction_e == APPSIG_MSG_DIR_TX)
             ||   (direction_e == APPSIG_MSG_DIR_RX_TX))
-            && (((currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32) > 
-                                                        (t_uint32)msgCfg_pas[idxMsg_u16].msgCycleSend_u16)))
+            && (((currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32) >=
+                                                        (t_uint32)msgCfg_pas[idxMsg_u16].msgCycleSend_u16)
+            || (msgInfo_pas[idxMsg_u16].forceSend_b == TRUE)))
             {
                 //---- send serial or can frame ----//
                 Ret_e = sendMsgCallback_pf(&msgCfg_pas[idxMsg_u16]);
@@ -841,6 +889,12 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                 {
                     //--- update last time send ----//
                     msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32 = currentTime_u32;
+
+                    //---- update flag ----//
+                    if(msgInfo_pas[idxMsg_u16].forceSend_b == TRUE)
+                    {   
+                        msgInfo_pas[idxMsg_u16].forceSend_b == FALSE;
+                    }
                 }
             }
         }

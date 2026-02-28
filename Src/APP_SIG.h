@@ -32,7 +32,8 @@
      */
    typedef void (t_cbAPPSIG_SignalRcvCallback)(t_eAPPSIG_Signal f_signal_e, t_float32 f_sigValue_f32);
    /**
-     * @brief Callback user to be noticed whenever a reception
+     * @brief Callback user to be 
+     noticed whenever a reception
      *         of a certain msg has arrived
      * @param[in] f_msgID_u16 : msg identifier from t_eAPPSIG_SrlMsgList or t_eAPPSIG_CanMsgList
      * @param[in] f_origine_e : CAN or SERIAL msg identifier
@@ -112,6 +113,17 @@
     *
     */
     t_eReturnCode APPSIG_GetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 * f_value_pf32);
+   /**
+    *
+    *	@brief Force to send a CAN or SERIAL MSG
+    *	@note   
+    *
+    *
+    *	@param[in] 
+    *
+    */
+   
+   t_eReturnCode APPSIG_ForceMsgSend(t_eAPPSIG_MsgOrigin f_origin_e, t_uint16 f_msgID_u16);
    /**
     *
     *	@brief
