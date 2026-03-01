@@ -589,6 +589,7 @@ t_eReturnCode APPSIG_AddRcvMsgCallback( t_uint16 f_msgID_u16,
     }
     else 
     {
+        Ret_e = RC_OK;
         if(f_msgOrigin_e == APPSIG_MSG_ORIGIN_CAN)
         {
             if(f_msgID_u16 >= (t_uint16)APPSIG_CAN_MSG_NB)
@@ -609,24 +610,25 @@ t_eReturnCode APPSIG_AddRcvMsgCallback( t_uint16 f_msgID_u16,
 
             msgInfo_pas = g_SrlSMsgInfo_as;
         }
-
-        Ret_e = RC_OK;
-        for(idxSubcriber_u8 = (t_uint8)0 ; 
-        (idxSubcriber_u8 < APPSIG_MSG_RCV_SUBSRIBERS_MAX)
-        && (itemFreeFound_b == FALSE) ; 
-        idxSubcriber_u8++)
+        if(Ret_e == RC_OK)
         {
-            if(msgInfo_pas[f_msgID_u16].rcvCallback_pacb[idxSubcriber_u8] == NULL_FUNCTION)
+            for(idxSubcriber_u8 = (t_uint8)0 ; 
+            (idxSubcriber_u8 < APPSIG_MSG_RCV_SUBSRIBERS_MAX)
+            && (itemFreeFound_b == FALSE) ; 
+            idxSubcriber_u8++)
             {
-                itemFreeFound_b = TRUE;
-                msgInfo_pas[f_msgID_u16].rcvCallback_pacb[idxSubcriber_u8] = f_msgRcvCallback_pcb;
+                if(msgInfo_pas[f_msgID_u16].rcvCallback_pacb[idxSubcriber_u8] == NULL_FUNCTION)
+                {
+                    itemFreeFound_b = TRUE;
+                    msgInfo_pas[f_msgID_u16].rcvCallback_pacb[idxSubcriber_u8] = f_msgRcvCallback_pcb;
+                }
             }
-        }
-        //--- not found any container
-        //      consider to rise APPSIG_MSG_RCV_SUBSRIBERS_MAX ----//
-        if(itemFreeFound_b == FALSE)
-        {
-            Ret_e = RC_ERROR_LIMIT_REACHED;
+            //--- not found any container
+            //      consider to rise APPSIG_MSG_RCV_SUBSRIBERS_MAX ----//
+            if(itemFreeFound_b == FALSE)
+            {
+                Ret_e = RC_ERROR_LIMIT_REACHED;
+            }
         }
     }
 
@@ -967,7 +969,7 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                                                 (t_uint16)f_msgGate_e);
                         
                         //---- also update validity of signal in this message ----//
-                        for(idxSignal_u8 = (t_uint8)0 ; idxSignal_u8 < msgCfg_pas->nbSignal_u8 ; idxSignal_u8++)
+                        for(idxSignal_u8 = (t_uint8)0 ; idxSignal_u8 < msgCfg_pas[idxMsg_u16].nbSignal_u8 ; idxSignal_u8++)
                         {
                             t_eAPPSIG_Signal sigID_e = (msgCfg_pas->msgSignalsCfg_pas[idxSignal_u8].signal_e);
                             g_signalInfo_as[sigID_e].isValid_b = FALSE;
