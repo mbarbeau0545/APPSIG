@@ -710,7 +710,7 @@ static t_eReturnCode s_APPSIG_Ope_RxSignalMngmt(void)
     t_sAPPSIG_MsgCfg * msgCfg_ps = NULL;
     t_cbAPPSIG_MsgRcvCallback ** msgCallback_pacb = NULL;
     t_uint8 idxTreatMsg_u8;
-    t_uint16 msgId_u16;
+    t_uint16 msgId_u16 = 0U;
 
     Ret_e = RC_OK;
     taskRet_e = RC_OK;
@@ -893,7 +893,7 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                     //---- update flag ----//
                     if(msgInfo_pas[idxMsg_u16].forceSend_b == TRUE)
                     {   
-                        msgInfo_pas[idxMsg_u16].forceSend_b == FALSE;
+                        msgInfo_pas[idxMsg_u16].forceSend_b = FALSE;
                     }
                 }
             }
@@ -1565,6 +1565,9 @@ static t_eReturnCode s_APPSIG_BroadcastUpdate(  t_sAPPSIG_MsgCfg  * f_msgCfg_ps,
     else 
     {
         Ret_e = RC_OK;
+        (void)SafeMem_memclear(g_signalValBufferCb_af32, sizeof(g_signalValBufferCb_af32));
+        (void)SafeMem_memclear(g_signalIDBufferCb_ae, sizeof(g_signalIDBufferCb_ae));
+
         for(idxmsgSignal_u8 = (t_uint8)0 ; idxmsgSignal_u8 < f_msgCfg_ps->nbSignal_u8 ; idxmsgSignal_u8++)
         {
             sigToBroadcast_e = f_msgCfg_ps->msgSignalsCfg_pas[idxmsgSignal_u8].signal_e;
