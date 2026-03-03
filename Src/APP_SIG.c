@@ -1350,7 +1350,7 @@ static void  s_APPSIG_CanRcvCallback(t_eFMKFDCAN_NodeList f_Node_e,
     }
     else if(f_RxItem_s.CanMsg_s.Dlc_e != APPSIG_DATA_PAYLOAD_LEN)
     {
-        ASSERT((t_uint16)f_RxItem_s.CanMsg_s.Dlc_e);
+        ASSERT((t_uint16)(f_RxItem_s.ItemId_s.Identifier_u32));
     }
     else if(f_NodeStatus_e != FMKFDCAN_NODE_STATE_OK)
     {
