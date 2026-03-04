@@ -297,8 +297,8 @@ t_eReturnCode APPSIG_Init(void)
 
     //---- Configure Rx Buffer Queue ----//
     queueCfg_s.bufferHead_pv = (void *)&g_msgPayloadBuffer_as;
-    queueCfg_s.bufferSize_u8 = APPSIG_RX_BUFFER_SIZE;
-    queueCfg_s.elementSize_u8 = sizeof(t_sAPPSIG_msgPayload);
+    queueCfg_s.actualSize_u16 = APPSIG_RX_BUFFER_SIZE;
+    queueCfg_s.elementSize_u16 = sizeof(t_sAPPSIG_msgPayload);
     queueCfg_s.enableOverwrite_b = False;
     Ret_e = LIBQUEUE_Create(&g_RxSoftQueueMngmt_s, queueCfg_s);
 
@@ -977,8 +977,7 @@ static t_eReturnCode s_APPSIG_RxTimeoutMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                     }
                 }
             }
-        }
-        
+        }        
     }
 
     return Ret_e;
