@@ -878,11 +878,11 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
             //---- reach direction depending on ecu Id ----//
             direction_e = msgCfg_pas[idxMsg_u16].direction_ae[g_EcuId_e];
 
-            if( ((direction_e == APPSIG_MSG_DIR_TX)
-            ||   (direction_e == APPSIG_MSG_DIR_RX_TX))
-            && (((currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32) >=
-                                                        (t_uint32)msgCfg_pas[idxMsg_u16].msgCycleSend_u16)
-            || (msgInfo_pas[idxMsg_u16].forceSend_b == TRUE)))
+            if ((msgInfo_pas[idxMsg_u16].forceSend_b == TRUE) 
+            || (((direction_e == APPSIG_MSG_DIR_TX) 
+            || (direction_e == APPSIG_MSG_DIR_RX_TX)) 
+            && ((t_uint32)(currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32) >=
+                        (t_uint32)msgCfg_pas[idxMsg_u16].msgCycleSend_u16)))
             {
                 //---- send serial or can frame ----//
                 Ret_e = sendMsgCallback_pf(&msgCfg_pas[idxMsg_u16]);
