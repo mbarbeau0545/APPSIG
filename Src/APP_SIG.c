@@ -66,7 +66,8 @@ typedef struct
 {
     t_float32 value_f32;                                                                    //---- current value of the signal -----//
     t_bool isValid_b;                                                                       //---- Flag to know of the value is valid ----//
-    t_bool isRcvOnce_b;                                                                     //---- Flag to know of the value has been at least rcv once ----//
+    t_bool isRcvOnce_b;
+    t_bool isDirty_b;                                                                    //---- Flag to know of the value has been at least rcv once ----//
     t_cbAPPSIG_SignalRcvCallback  * rcvCallback_pacb[APPSIG_SIG_RCV_SUBSRIBERS_MAX];        //---- array of callback for notice update signals ----//
 } t_sAPPSIG_SignalInfo;
 //-----------------------------TYPEDEF TYPES---------------------------//
@@ -275,6 +276,16 @@ static void s_APPSIG_InsertRawValue( t_uint8 * f_data_pu8,
 *
 *
 */
+static t_eReturnCode s_APPSIG_ReqMsgSendingValidity(t_sAPPSIG_MsgCfg * f_msgCfg_ps,
+                                                    t_sAPPSIG_MsgInfo * f_msgInfo_ps,
+                                                    t_bool * f_isSendReq_pb);
+/**
+*
+*	@brief      Configure the Wire Serial Line.
+*	@note   	 
+*
+*
+*/
 static t_eReturnCode s_APPSIG_BroadcastUpdate(  t_sAPPSIG_MsgCfg  * f_msgCfg_ps, 
                                                 t_uint16 f_msgEnmID_u16,
                                                 t_cbAPPSIG_MsgRcvCallback  ** f_rcvMsgCb_pacb);
@@ -308,6 +319,7 @@ t_eReturnCode APPSIG_Init(void)
         g_signalInfo_as[LLI_u16].value_f32 = (t_float32)-1.0f;
         g_signalInfo_as[LLI_u16].isRcvOnce_b = FALSE;
         g_signalInfo_as[LLI_u16].isValid_b = FALSE;
+        g_signalInfo_as[LLI_u16].isDirty_b = FALSE;
 
         for(LLI2_u8 = (t_uint8)0 ; LLI2_u8 < APPSIG_MSG_RCV_SUBSRIBERS_MAX ; LLI2_u8++)
         {
@@ -421,6 +433,7 @@ t_eReturnCode APPSIG_SetState(t_eCyclicModState f_State_e)
 t_eReturnCode APPSIG_SetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 f_value_f32)
 {
     t_eReturnCode Ret_e;
+    t_sAPPSIG_SignalInfo * sigInfos_ps;
 
     if(f_signal_e >= APPSIG_SIGNAL_NB)
     {
@@ -430,11 +443,15 @@ t_eReturnCode APPSIG_SetSignalValue(t_eAPPSIG_Signal f_signal_e, t_float32 f_val
     else 
     {
         Ret_e = RC_OK;
-        g_signalInfo_as[f_signal_e].value_f32 = f_value_f32;
-
-        if(g_signalInfo_as[f_signal_e].isValid_b == FALSE)
-        {   
-            g_signalInfo_as[f_signal_e].isValid_b = TRUE;
+        sigInfos_ps = &g_signalInfo_as[f_signal_e];
+        if(f_value_f32 != sigInfos_ps->value_f32)
+        {
+            //---- no change on value ----//
+            sigInfos_ps->value_f32 = f_value_f32;
+            if(sigInfos_ps->isDirty_b == FALSE)
+            {   
+                sigInfos_ps->isDirty_b = TRUE;
+            }
         }
     }
 
@@ -833,8 +850,8 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
 {
     t_eReturnCode Ret_e;
     t_uint16 idxMsg_u16;
-    t_uint32 currentTime_u32;
-    t_eAPPSIG_MsgDirection direction_e;
+    t_uint32 currentTime_u32 = 0U;
+    t_bool isReqSendMsg_b = FALSE;
     t_sAPPSIG_MsgCfg * msgCfg_pas = (t_sAPPSIG_MsgCfg *)NULL;
     t_sAPPSIG_MsgInfo * msgInfo_pas = (t_sAPPSIG_MsgInfo *)NULL;
     t_cbAPPSIG_SendFrameMsg * sendMsgCallback_pf = (t_cbAPPSIG_SendFrameMsg *)NULL;
@@ -856,14 +873,14 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
             sendMsgCallback_pf = &s_APPSIG_SendCanFrame;
             msgInfo_pas = (t_sAPPSIG_MsgInfo *)g_CANSMsgInfo_as;
             msgCfg_pas = (t_sAPPSIG_MsgCfg *)(c_AppSig_CanMsgCfg_as);
-            nbMsg_u16 = APPSIG_CAN_MSG_NB;
+            nbMsg_u16 = (t_uint16)APPSIG_CAN_MSG_NB;
         }
         else if(f_msgGate_e == APPSIG_MSG_ORIGIN_SRL)
         {
             sendMsgCallback_pf = &s_APPSIG_SendSrlFrame;
             msgInfo_pas = (t_sAPPSIG_MsgInfo *)g_SrlSMsgInfo_as;
             msgCfg_pas = (t_sAPPSIG_MsgCfg *)(c_AppSig_SrlMsgCfg_as);
-            nbMsg_u16 = APPSIG_SRL_MSG_NB;
+            nbMsg_u16 = (t_uint16)APPSIG_SRL_MSG_NB;
         }
         else 
         {
@@ -876,13 +893,11 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
         idxMsg_u16++)
         {
             //---- reach direction depending on ecu Id ----//
-            direction_e = msgCfg_pas[idxMsg_u16].direction_ae[g_EcuId_e];
-
-            if ((msgInfo_pas[idxMsg_u16].forceSend_b == TRUE) 
-            || (((direction_e == APPSIG_MSG_DIR_TX) 
-            || (direction_e == APPSIG_MSG_DIR_RX_TX)) 
-            && ((t_uint32)(currentTime_u32 - msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32) >=
-                        (t_uint32)msgCfg_pas[idxMsg_u16].msgCycleSend_u16)))
+            Ret_e = s_APPSIG_ReqMsgSendingValidity( &msgCfg_pas[idxMsg_u16],
+                                                    &msgInfo_pas[idxMsg_u16],
+                                                    &isReqSendMsg_b);
+            if ((isReqSendMsg_b == TRUE)
+            &&  (Ret_e == RC_OK))
             {
                 //---- send serial or can frame ----//
                 Ret_e = sendMsgCallback_pf(&msgCfg_pas[idxMsg_u16]);
@@ -893,9 +908,15 @@ static t_eReturnCode s_APPSIG_SendTxMsgMngmt(t_eAPPSIG_MsgOrigin f_msgGate_e)
                     msgInfo_pas[idxMsg_u16].timeStamp_s.lastTimeSend_u32 = currentTime_u32;
 
                     //---- update flag ----//
-                    if(msgInfo_pas[idxMsg_u16].forceSend_b == TRUE)
-                    {   
-                        msgInfo_pas[idxMsg_u16].forceSend_b = FALSE;
+                    msgInfo_pas[idxMsg_u16].forceSend_b = FALSE;
+                    for(t_uint8 idxSig_u8 = 0 ; idxSig_u8 < msgCfg_pas[idxMsg_u16].nbSignal_u8 ; idxSig_u8++)
+                    {
+                        t_eAPPSIG_Signal sigID_e = msgCfg_pas[idxMsg_u16].msgSignalsCfg_pas[idxSig_u8].signal_e;
+
+                        if(g_signalInfo_as[sigID_e].isDirty_b == TRUE)
+                        {
+                            g_signalInfo_as[sigID_e].isDirty_b = FALSE;
+                        }
                     }
                 }
             }
@@ -1545,6 +1566,80 @@ static void s_APPSIG_FastTask(void)
     return;
 }
 
+/*********************************
+ * s_APPSIG_BroadcastUpdate
+ *********************************/
+static t_eReturnCode s_APPSIG_ReqMsgSendingValidity(t_sAPPSIG_MsgCfg * f_msgCfg_ps,
+                                                    t_sAPPSIG_MsgInfo * f_msgInfo_ps,
+                                                    t_bool * f_isSendReq_pb)
+{
+    t_eReturnCode Ret_e;
+    t_eAPPSIG_MsgDirection direction_e;
+    t_eAPPSIG_TxPolicy policy_e;
+    t_uint32 currentTime_u32;
+    t_bool isReqSend_b = FALSE;
+
+    if((f_isSendReq_pb == NULL)
+    || (f_msgCfg_ps == NULL)
+    || (f_msgInfo_ps == NULL))
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else 
+    {
+        Ret_e = RC_OK;
+        FMKCPU_GetTick(&currentTime_u32);
+        direction_e = f_msgCfg_ps->direction_ae[g_EcuId_e];
+        policy_e = f_msgCfg_ps->txPolicy_e;
+
+        if(f_msgInfo_ps->forceSend_b == TRUE)
+        {
+            isReqSend_b = TRUE;
+        }
+        else if((direction_e != APPSIG_MSG_DIR_TX)
+        && (direction_e != APPSIG_MSG_DIR_RX_TX))
+        {
+            isReqSend_b = FALSE;
+        }
+        else if(policy_e == APPSIG_TX_POLICY_FORCE)
+        {
+            if((f_msgCfg_ps->msgCycleSend_u16 == (t_uint16)0)
+            || ((currentTime_u32 - f_msgInfo_ps->timeStamp_s.lastTimeSend_u32) >= f_msgCfg_ps->msgCycleSend_u16))
+            {
+                isReqSend_b = TRUE;
+            }
+        }
+        else if(policy_e == APPSIG_TX_POLICY_ONCHANGE)
+        {
+            //---- first check if at least one 
+            //      signal is dirty ----//
+            for(t_uint8 idxSig_u8 = 0 ; idxSig_u8 < f_msgCfg_ps->nbSignal_u8 ; idxSig_u8++)
+            {
+                t_eAPPSIG_Signal sigID_e = f_msgCfg_ps->msgSignalsCfg_pas[idxSig_u8].signal_e;
+
+                if(g_signalInfo_as[sigID_e].isDirty_b == TRUE)
+                {
+                    isReqSend_b = TRUE;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            /* Default policy: periodic send when a cycle time is configured. */
+            if((f_msgCfg_ps->msgCycleSend_u16 != (t_uint16)0)
+            && ((currentTime_u32 - f_msgInfo_ps->timeStamp_s.lastTimeSend_u32) >= f_msgCfg_ps->msgCycleSend_u16))
+            {
+                isReqSend_b = TRUE;
+            }
+        }
+        // else FALSE
+        *f_isSendReq_pb = isReqSend_b;
+    }
+
+    return Ret_e;
+}
 /*********************************
  * s_APPSIG_BroadcastUpdate
  *********************************/
