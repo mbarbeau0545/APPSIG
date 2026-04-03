@@ -1054,7 +1054,7 @@ static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayloa
         if(msgPortGateCfg_pas != (t_sAPPSIG_MsgCfg *)NULL)
         {
             //--- we suppose that we don't found the element 
-            Ret_e = RC_ERROR_LIMIT_REACHED;
+            Ret_e = RC_WARNING_NO_OPERATION;
             //---- find the message info from msgPortGate cfg ----//
             for(idxMsgPrt_u16 = (t_uint16)0 ; 
             (idxMsgPrt_u16 < msgPortNb_u16)
@@ -1068,7 +1068,7 @@ static t_eReturnCode s_APPSIG_FindSignalMapping(t_sAPPSIG_msgPayload f_msgPayloa
                 {
                     if(direction_e == APPSIG_MSG_DIR_UNUSED)
                     {
-                        Ret_e = RC_WARNING_NO_OPERATION;
+                        break;
                     }
                     else // RX oR RX_TX
                     {
