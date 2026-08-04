@@ -1252,6 +1252,15 @@ static t_eReturnCode s_APPSIG_InitializeCanGate(void)
 {
     t_eReturnCode Ret_e;
 
+    t_sFMKFDCAN_DrvNodeCfg drvNodeCfg_s = {
+        .clockDivider_e = FMKFDCAN_CLOCK_KERNEL_DIV1,
+        .ProtocolUse_e = FMKFDCAN_PROTOCOL_CAN2_0B,
+        .DataBaudrate_e = FMKFDCAN_FRAME_BAUDRATE_250K,
+        .FrameBaudrate_e = FMKFDCAN_FRAME_BAUDRATE_250K,
+        .QueueType_e = FMKFDCAN_HWQUEUE_TYPE_FIFO,
+        .FifoMode_e = FMKFDCAN_FIFO_OPEMODE_BLOCKING,
+    };
+
     t_sFMKFDCAN_RxItemEventCfg rxItemEvnCfg_s = {
         .ItemId_s.Identifier_u32 = APPSIG_CAN_ID_COMMON,
         .ItemId_s.FramePurpose_e = FMKFDCAN_FRAME_PURPOSE_DATA,
@@ -1261,9 +1270,16 @@ static t_eReturnCode s_APPSIG_InitializeCanGate(void)
         .callback_cb = s_APPSIG_CanRcvCallback
     };
 
-    Ret_e = FMKFDCAN_ConfigureRxItemEvent(APPSIG_PORTGATE_CAN_NODE, rxItemEvnCfg_s);
+    // //---- init driver node with configuration ----//
+    // Ret_e = FMKFDCAN_InitDriver(APPSIG_PORTGATE_CAN_NODE, drvNodeCfg_s);
 
-    return Ret_e;
+    // if(Ret_e == RC_OK)
+    // {
+    //     //---- configure rx item ----//
+    //     Ret_e = FMKFDCAN_ConfigureRxItemEvent(APPSIG_PORTGATE_CAN_NODE, rxItemEvnCfg_s);
+    // }
+
+    return RC_OK;
 }
 
 /*********************************
